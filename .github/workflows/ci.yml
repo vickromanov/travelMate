@@ -12,14 +12,15 @@ concurrency:
 
 jobs:
   verify:
-    name: typecheck · lint · test · build
+    name: typecheck · test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
+      # IMPORTANT: do NOT pass `version:` here. The pnpm version is the single
+      # source of truth in package.json ("packageManager": "pnpm@9.12.0").
+      # Specifying it in both places fails with ERR_PNPM_BAD_PM_VERSION.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
@@ -30,34 +31,18 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Turborepo runs only the packages affected by the change (cached).
-      - name: Typecheck
+      - name: Typecheck (tsc across every package)
         run: pnpm typecheck
 
-      - name: Lint (incl. tier import-boundary rules)
-        run: pnpm lint
-
-      - name: Unit + contract tests
+      - name: Unit + contract tests (vitest)
         run: pnpm test
 
-      - name: Build the package graph
-        run: pnpm build
-
-  e2e:
-    name: web E2E (Playwright)
-    runs-on: ubuntu-latest
-    needs: verify
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - name: Install
-        run: pnpm install --frozen-lockfile
-      - name: Install Playwright browsers
-        run: pnpm --filter @travelmate/web exec playwright install --with-deps
-      - name: E2E
-        run: pnpm e2e
+  # ── Roadmap: enable as the codebase grows (kept here on purpose) ───────────
+  # lint   — add an ESLint flat config per package; the tier import-boundary
+  #          preset already lives in packages/config/eslint.preset.js, so each
+  #          package config can be a one-line re-export. Then add a `lint` step.
+  # build  — library packages are "internal packages" validated by `typecheck`
+  #          (no emit; consumers transpile the TS). The web app's `next build`
+  #          becomes a real gate once apps/web has actual screens.
+  # e2e    — add a Playwright config + specs once apps/web is interactive, then
+  #          a job that runs `playwright install --with-deps` and `pnpm e2e`.

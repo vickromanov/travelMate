@@ -40,9 +40,11 @@ export class ContractError extends Error {
   constructor(
     public readonly code: string,
     message: string,
-    public readonly cause?: unknown,
+    cause?: unknown,
   ) {
-    super(message);
+    // Use the native Error `cause` option (ES2022) rather than a parameter
+    // property, which would collide with the inherited Error.cause member.
+    super(message, cause !== undefined ? { cause } : undefined);
     this.name = "ContractError";
   }
 }

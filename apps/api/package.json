@@ -14,13 +14,14 @@
   },
   "dependencies": {
     "@travelmate/contracts": "workspace:*",
-    "@travelmate/orchestrator": "workspace:*",
     "@travelmate/database": "workspace:*",
-    "@travelmate/trip-mode": "workspace:*",
-    "@travelmate/llm": "workspace:*"
+    "@travelmate/llm": "workspace:*",
+    "@travelmate/orchestrator": "workspace:*",
+    "@travelmate/trip-mode": "workspace:*"
   },
   "devDependencies": {
     "@travelmate/config": "workspace:*",
+    "@types/node": "^22",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
