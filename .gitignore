@@ -13,6 +13,16 @@ out/
 # turbo
 .turbo/
 
+# emitted TypeScript output — all source is .ts/.tsx; compiled files are never
+# authored and must never be committed (can leak into src/ if tsc is told to emit)
+packages/*/src/**/*.js
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.js.map
+packages/*/src/**/*.d.ts.map
+packages/*/__tests__/**/*.js
+apps/*/src/**/*.js
+apps/*/src/**/*.d.ts
+
 # test / coverage
 coverage/
 playwright-report/
