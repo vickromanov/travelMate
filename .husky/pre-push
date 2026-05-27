@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+# pre-push — run the same checks CI runs, before anything leaves your machine.
+# Aborts the push if typecheck or tests fail. Runs on every push (any branch),
+# so your PR is green before CI even starts. Mirrors .github/workflows/ci.yml.
+#
+# Bypass only when you truly must:  git push --no-verify
+
+echo "🔎 pre-push: running CI checks (typecheck + tests)…"
+
+if ! pnpm typecheck; then
+  echo "❌ pre-push: typecheck failed — push aborted."
+  echo "   Fix the errors above, or bypass with:  git push --no-verify"
+  exit 1
+fi
+
+if ! pnpm test; then
+  echo "❌ pre-push: tests failed — push aborted."
+  echo "   Fix the failures above, or bypass with:  git push --no-verify"
+  exit 1
+fi
+
+echo "✅ pre-push: all checks passed — pushing."

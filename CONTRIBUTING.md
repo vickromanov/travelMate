@@ -41,6 +41,17 @@ pnpm test:contracts
 
 All green, the PR template filled, CODEOWNERS review obtained. CI must pass to merge.
 
+## Automated pre-push check
+
+A Husky `pre-push` hook (`.husky/pre-push`) runs `pnpm typecheck && pnpm test` on
+**every** push and aborts it if anything fails — so you never push a red commit, and your
+PR is green before CI even starts. It mirrors `.github/workflows/ci.yml` and installs
+itself when you run `pnpm install` (via the `prepare` script) — nothing to set up.
+
+- Bypass only when you truly must: `git push --no-verify`.
+- If `pnpm` isn't found inside the hook (rare — some GUI git clients use a minimal PATH),
+  run pushes from your terminal so your shell PATH is available to git.
+
 ## Decisions
 
 Anything irreversible (a model default, a data-source choice, a freshness policy switch,
