@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+.pnp.*
+.yarn/*
+
+# build output
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# turbo
+.turbo/
+
+# test / coverage
+coverage/
+playwright-report/
+test-results/
+
+# env — NEVER commit secrets (see .env.example for the template)
+.env
+.env.local
+.env.*.local
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
+npm-debug.log*
+pnpm-debug.log*

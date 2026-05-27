@@ -1,0 +1,25 @@
+{
+  "name": "@travelmate/llm",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Provider-agnostic LLM access: model router/cascade, prompt caching, token budgets, semantic response cache. Model IDs live ONLY in router.ts.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "clean": "rm -rf dist .turbo coverage"
+  },
+  "dependencies": {
+    "@travelmate/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@travelmate/config": "workspace:*",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

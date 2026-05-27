@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": false,
+    "paths": {
+      "@travelmate/contracts": ["./packages/contracts/src/index.ts"],
+      "@travelmate/llm": ["./packages/llm/src/index.ts"],
+      "@travelmate/fetchers": ["./packages/fetchers/src/index.ts"],
+      "@travelmate/orchestrator": ["./packages/orchestrator/src/index.ts"],
+      "@travelmate/database": ["./packages/database/src/index.ts"],
+      "@travelmate/trip-mode": ["./packages/trip-mode/src/index.ts"],
+      "@travelmate/ui": ["./packages/ui/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "dist", ".next", "coverage"]
+}

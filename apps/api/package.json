@@ -1,0 +1,28 @@
+{
+  "name": "@travelmate/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Thin HTTP host. Exposes the Orchestrator + Trip Mode over /plan /modify /trip-mode. No business logic of its own — that lives in the packages.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run --passWithNoTests",
+    "clean": "rm -rf dist .turbo coverage"
+  },
+  "dependencies": {
+    "@travelmate/contracts": "workspace:*",
+    "@travelmate/orchestrator": "workspace:*",
+    "@travelmate/database": "workspace:*",
+    "@travelmate/trip-mode": "workspace:*",
+    "@travelmate/llm": "workspace:*"
+  },
+  "devDependencies": {
+    "@travelmate/config": "workspace:*",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

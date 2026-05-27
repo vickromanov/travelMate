@@ -1,0 +1,17 @@
+# CODEOWNERS — intentionally empty (no active ownership rules yet).
+#
+# Per projectStructure.md §9, each tier package gets one owner so PRs auto-route,
+# and packages/contracts is co-owned (a contract change must be reviewed by every
+# tier owner because it is the only thing that can break another tier).
+#
+# Fill in GitHub handles when the team is set up. Uncomment to activate:
+#
+# /packages/contracts/    @owner-a @owner-b @owner-c   # co-owned, change-gated
+# /packages/orchestrator/ @owner-a
+# /packages/fetchers/     @owner-b
+# /packages/database/     @owner-b
+# /packages/llm/          @owner-a
+# /packages/trip-mode/    @owner-c
+# /apps/web/              @owner-c
+# /apps/api/              @owner-a
+# /packages/ui/           @owner-c

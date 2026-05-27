@@ -1,0 +1,5 @@
+# Declares which directories are workspace packages.
+# Every tier from projectStructure.md §1 is a package here.
+packages:
+  - "apps/*"
+  - "packages/*"

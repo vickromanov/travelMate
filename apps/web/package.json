@@ -1,0 +1,33 @@
+{
+  "name": "@travelmate/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "UX tier (web). Next.js App Router. Renders & edits the plan; reads the Database, subscribes to the Observer. NEVER fetches or calls the LLM (P5).",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint app src",
+    "test": "vitest run --passWithNoTests",
+    "e2e": "playwright test",
+    "clean": "rm -rf .next dist .turbo coverage"
+  },
+  "dependencies": {
+    "@travelmate/contracts": "workspace:*",
+    "@travelmate/database": "workspace:*",
+    "@travelmate/trip-mode": "workspace:*",
+    "@travelmate/ui": "workspace:*",
+    "next": "^15.0.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0",
+    "@travelmate/config": "workspace:*",
+    "@types/react": "^18.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

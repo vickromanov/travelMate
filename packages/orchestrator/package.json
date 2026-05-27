@@ -1,0 +1,28 @@
+{
+  "name": "@travelmate/orchestrator",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The brain. Four explicit stages: intent → fetch-planner → synthesis → re-flow. Sole writer to the Database. Never imported by the UX.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src __tests__",
+    "test": "vitest run",
+    "clean": "rm -rf dist .turbo coverage"
+  },
+  "dependencies": {
+    "@travelmate/contracts": "workspace:*",
+    "@travelmate/fetchers": "workspace:*",
+    "@travelmate/database": "workspace:*",
+    "@travelmate/llm": "workspace:*"
+  },
+  "devDependencies": {
+    "@travelmate/config": "workspace:*",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
