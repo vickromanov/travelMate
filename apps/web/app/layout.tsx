@@ -1,9 +1,9 @@
-/** Root layout. Skeleton placeholder. */
 import type { ReactNode } from "react";
+import "./globals.css";
 
 export const metadata = {
-  title: "TravelMate",
-  description: "The zero-thinking itinerary. See about_travelMate.md.",
+  title: "TravelMate — Zero-thinking itineraries",
+  description: "Describe any trip, get a complete itinerary.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

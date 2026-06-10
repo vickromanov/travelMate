@@ -9,17 +9,17 @@
  */
 import type { LLMStage, ModelTier } from "@travelmate/contracts";
 
-/** Concrete model per (provider, tier). Skeleton placeholders. */
+/** Concrete model per (provider, tier). Verified 2026-06 against provider docs. */
 export const MODEL_TABLE: Record<string, Record<ModelTier, string>> = {
   anthropic: {
-    fast: "claude-haiku-latest", // cheap/fast workhorse
-    mid: "claude-sonnet-latest", // near-flagship quality at mid cost
-    frontier: "claude-opus-latest", // last-resort reasoning
+    fast: "claude-haiku-4-5-20251001",
+    mid: "claude-sonnet-4-6",
+    frontier: "claude-opus-4-8",
   },
   gemini: {
-    fast: "gemini-flash-latest", // cheapest high-volume option
-    mid: "gemini-pro-latest",
-    frontier: "gemini-pro-latest",
+    fast: "gemini-2.5-flash",
+    mid: "gemini-2.5-pro",
+    frontier: "gemini-2.5-pro",
   },
   mock: { fast: "mock", mid: "mock", frontier: "mock" },
 };

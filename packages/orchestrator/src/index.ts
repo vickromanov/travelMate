@@ -2,9 +2,9 @@
  * @travelmate/orchestrator — the brain. The ONLY package that writes to the
  * Database. NEVER imported by the UX (import matrix, projectStructure.md §2).
  */
-import { NotImplemented } from "@travelmate/contracts";
 import type { CrucialInfo, PlanEdit, StreamCallbacks } from "@travelmate/contracts";
-import type { Deps } from "./pipeline.js";
+import { NotImplemented } from "@travelmate/contracts";
+import { runPlanPipeline, type Deps } from "./pipeline.js";
 
 export * from "./pipeline.js";
 export { extractIntent } from "./intent.js";
@@ -14,11 +14,11 @@ export { reflow } from "./reflow.js";
 
 /** Public entrypoint A: build a brand-new plan from user input. */
 export async function orchestrate(
-  _input: CrucialInfo,
-  _deps: Deps,
-  _cb: StreamCallbacks,
+  input: CrucialInfo,
+  deps: Deps,
+  cb: StreamCallbacks,
 ): Promise<void> {
-  throw new NotImplemented("orchestrator.orchestrate");
+  return runPlanPipeline(input, deps, cb);
 }
 
 /** Public entrypoint B: apply one edit via scoped re-flow (H4). */

@@ -1,27 +1,45 @@
 /**
- * apps/api — thin HTTP host. Wires routes to the Orchestrator + Trip Mode and
- * does boundary validation. NO business logic here (it lives in the packages).
- * HTTP framework (e.g. Fastify) chosen + added in the implementation phase.
+ * apps/api — HTTP host. Fastify server with SSE for the plan pipeline.
+ * Singleton db + llm shared across all requests.
  */
-import { NotImplemented } from "@travelmate/contracts";
-import { handlePlan } from "./routes/plan.js";
-import { handleModify } from "./routes/modify.js";
-import {
-  handleTripModeStart,
-  handleTripModeTick,
-} from "./routes/trip-mode.js";
+// Load .env.local before any other module reads process.env
+import { config as loadEnv } from "dotenv";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+loadEnv({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../.env.local") });
 
-export const routes = {
-  "POST /plan": handlePlan,
-  "POST /modify": handleModify,
-  "POST /trip-mode/start": handleTripModeStart,
-  "POST /trip-mode/tick": handleTripModeTick,
-};
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import { createDatabase } from "@travelmate/database";
+import { createLLMClient } from "@travelmate/llm";
+import type { Deps } from "@travelmate/orchestrator";
+import { planRoutes } from "./routes/plan.js";
 
-export async function startServer(_port = Number(process.env.API_PORT ?? 8080)) {
-  throw new NotImplemented("api.startServer");
+export const db = createDatabase("memory");
+export const llm = createLLMClient();
+export const deps: Deps = { db, llm };
+
+export async function startServer(port = Number(process.env.API_PORT ?? 8080)) {
+  const app = Fastify({ logger: { level: "info" } });
+
+  await app.register(cors, {
+    origin: process.env.CORS_ORIGIN ?? "http://localhost:3000", // Next.js dev default
+    methods: ["GET", "POST", "OPTIONS"],
+  });
+
+  await app.register(planRoutes);
+
+  app.get("/health", async () => ({ status: "ok" }));
+
+  await app.listen({ port, host: "0.0.0.0" });
+  console.log(`[api] listening on http://localhost:${port}`);
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1])) {
-  void startServer();
+// Entry point when run directly
+const isMain = process.argv[1]?.endsWith("index.ts") || process.argv[1]?.endsWith("index.js");
+if (isMain) {
+  startServer().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }

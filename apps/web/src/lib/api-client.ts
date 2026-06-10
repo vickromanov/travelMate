@@ -7,7 +7,8 @@
 import { NotImplemented } from "@travelmate/contracts";
 import type { CrucialInfo, PlanEdit } from "@travelmate/contracts";
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+// Server URL — set NEXT_PUBLIC_API_BASE_URL in .env.local to override.
+export const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 export async function requestPlan(_info: CrucialInfo): Promise<void> {
   void BASE;

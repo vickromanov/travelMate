@@ -13,11 +13,14 @@
     "clean": "rm -rf dist .turbo coverage"
   },
   "dependencies": {
+    "@fastify/cors": "^10.0.2",
+    "dotenv": "^16.4.7",
     "@travelmate/contracts": "workspace:*",
     "@travelmate/database": "workspace:*",
     "@travelmate/llm": "workspace:*",
     "@travelmate/orchestrator": "workspace:*",
-    "@travelmate/trip-mode": "workspace:*"
+    "@travelmate/trip-mode": "workspace:*",
+    "fastify": "^5.2.1"
   },
   "devDependencies": {
     "@travelmate/config": "workspace:*",
