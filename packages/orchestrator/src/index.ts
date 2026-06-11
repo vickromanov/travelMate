@@ -17,8 +17,9 @@ export async function orchestrate(
   input: CrucialInfo,
   deps: Deps,
   cb: StreamCallbacks,
+  planId?: string,
 ): Promise<void> {
-  return runPlanPipeline(input, deps, cb);
+  return runPlanPipeline(input, deps, cb, planId);
 }
 
 /** Public entrypoint B: apply one edit via scoped re-flow (H4). */

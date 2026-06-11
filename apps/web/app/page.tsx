@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
+const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 // ── Types (mirror contracts without importing the package on the client) ──────
 
@@ -33,7 +33,17 @@ const CAT_ICON: Record<string, string> = {
   DINING: "🍽️", STAYS: "🏨", TRANSPORT: "🚆", ACTIVITIES: "🎯", LOGISTICS: "📋",
 };
 const TIER_COLOR: Record<string, string> = {
-  ANCHOR: "#6c63ff", "SMART-VALUE": "#4ade80", PREMIUM: "#fbbf24", INDEPENDENT: "#60a5fa",
+  ANCHOR: "#6c63ff",
+  "SMART-VALUE": "#4ade80",
+  PREMIUM: "#f59e0b",
+  INDEPENDENT: "#60a5fa",
+};
+
+const TIER_LABEL: Record<string, string> = {
+  ANCHOR: "⚓ Anchor",
+  "SMART-VALUE": "💡 Smart Value",
+  PREMIUM: "👑 Premium",
+  INDEPENDENT: "🧭 Independent",
 };
 
 // ── Input form ────────────────────────────────────────────────────────────────
@@ -177,13 +187,13 @@ function OptionCard({ opt, selected }: { opt: TravelOption; selected: boolean })
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
           <span
             style={{
-              fontSize: 10, fontWeight: 700, padding: "2px 6px",
+              fontSize: 11, fontWeight: 700, padding: "2px 8px",
               borderRadius: 4, color: "#fff",
               background: TIER_COLOR[opt.tier] ?? "var(--accent)",
-              flexShrink: 0,
+              flexShrink: 0, whiteSpace: "nowrap",
             }}
           >
-            {opt.tier}
+            {TIER_LABEL[opt.tier] ?? opt.tier}
           </span>
           <span style={{ fontWeight: selected ? 600 : 400, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {opt.title}
@@ -419,15 +429,22 @@ export default function Home() {
     });
 
     es.addEventListener("error", (e) => {
-      const data = JSON.parse((e as MessageEvent).data ?? "{}") as { message?: string };
+      // Only handle server-sent `event: error` messages (have .data).
+      // Native connection errors have no .data — let onerror handle those.
+      const raw = (e as MessageEvent).data;
+      if (!raw) return;
+      const { message } = JSON.parse(raw) as { message?: string };
       es.close();
-      setScreen({ kind: "error", message: data.message ?? "Unknown error" });
+      setScreen({ kind: "error", message: message ?? "Server error" });
     });
 
     es.onerror = () => {
       es.close();
-      // only show error if we're still in thinking state
-      setScreen((s) => s.kind === "thinking" ? { kind: "error", message: "Connection lost. Is the API server running?" } : s);
+      setScreen((s) =>
+        s.kind === "thinking"
+          ? { kind: "error", message: "Could not reach the API server. Make sure it is running on port 8080." }
+          : s
+      );
     };
   }
 

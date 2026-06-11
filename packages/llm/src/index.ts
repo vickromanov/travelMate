@@ -43,12 +43,16 @@ function isRetryableError(err: unknown): boolean {
     msg.includes("high demand") || msg.includes("temporarily");
 }
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 function buildClient(provider: LLMProvider): LLMClient {
   return {
     async run(req, validate): Promise<LLMResponse> {
       let tier: ModelTier = STAGE_DEFAULT_TIER[req.stage];
       const maxTier: ModelTier = STAGE_MAX_TIER[req.stage];
       let lastError: Error | undefined;
+      let sameRetries = 0;
+      const MAX_SAME_RETRIES = 2;
 
       for (;;) {
         let res: LLMResponse;
@@ -57,15 +61,24 @@ function buildClient(provider: LLMProvider): LLMClient {
         } catch (err) {
           lastError = err instanceof Error ? err : new Error(String(err));
           const isRetryable = isRetryableError(err);
+          if (isRetryable && sameRetries < MAX_SAME_RETRIES) {
+            sameRetries++;
+            const delay = sameRetries * 8000;
+            console.warn(`[llm] ${tier} transient error — retry ${sameRetries}/${MAX_SAME_RETRIES} in ${delay}ms`);
+            await sleep(delay);
+            continue;
+          }
+          sameRetries = 0;
           const next = nextTier(tier);
           if (isRetryable && next && tierRank(next) <= tierRank(maxTier)) {
-            console.warn(`[llm] ${tier} error (${lastError.message.slice(0, 80)}) — escalating to ${next}`);
+            console.warn(`[llm] ${tier} exhausted retries — escalating to ${next}`);
             tier = next;
             continue;
           }
           throw lastError;
         }
 
+        sameRetries = 0; // reset on success or validation-fail (retries are per-tier)
         const isValid = !validate || validate(res.text);
         if (isValid) {
           if (process.env.NODE_ENV === "test" && !withinBudget(req.stage, res.usage)) {

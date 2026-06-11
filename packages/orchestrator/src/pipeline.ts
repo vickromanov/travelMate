@@ -26,6 +26,7 @@ export async function runPlanPipeline(
   input: CrucialInfo,
   deps: Deps,
   cb: StreamCallbacks,
+  planId?: string,
 ): Promise<void> {
   try {
     // Stage 1: intent
@@ -35,8 +36,8 @@ export async function runPlanPipeline(
     const fetchPlan = await buildFetchPlan(brief);
     const data = await resolveData(fetchPlan, deps.db);
 
-    // Stage 3: synthesis
-    const plan = await synthesizePlan(brief, data, deps.llm, cb);
+    // Stage 3: synthesis — use caller-supplied planId so observer subscription matches
+    const plan = await synthesizePlan(brief, data, deps.llm, cb, planId);
 
     // Stage 4: persist + notify (order matters — save before notify)
     await deps.db.plans.savePlan(plan);

@@ -90,7 +90,7 @@ export const ItineraryBlockSchema = z.object({
    * location → re-flow when the hotel changes). projectStructure.md §2 Refinement 1.
    */
   dependencyLogic: z.string(),
-  options: z.array(TravelOptionSchema).min(2).max(4),
+  options: z.array(TravelOptionSchema).min(4).max(4),
 });
 export type ItineraryBlock = z.infer<typeof ItineraryBlockSchema>;
 

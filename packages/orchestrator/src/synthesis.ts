@@ -19,6 +19,14 @@ Output ONLY valid JSON — no markdown, no code fences, no comments, no explanat
 The JSON must be parseable by JSON.parse().`;
 
 const SCHEMA_BLOCK = `
+=== CRITICAL BLOCK COUNT REQUIREMENT ===
+Every single day MUST contain AT LEAST 8 blocks:
+  - 3 × DINING  (breakfast 08:00, lunch 12:30, dinner 19:30)
+  - 2 × ACTIVITIES (morning + afternoon)
+  - 1 × STAYS (accommodation, scheduledTime "15:00" check-in or "21:30")
+  - 2 × TRANSPORT (one transfer per major location change)
+Do NOT stop after 1 block. Generate ALL blocks for the day before moving to the next day.
+
 === REQUIRED JSON OUTPUT SCHEMA ===
 
 {
@@ -47,21 +55,43 @@ const SCHEMA_BLOCK = `
               "id": "d1_b1_o1",
               "tier": "ANCHOR",
               "title": "Specific venue name",
-              "description": "What this place is and what makes it special",
-              "reasoning": "Why THIS traveler will love this specific choice",
+              "description": "What it is and why it's the best baseline fit for this trip archetype",
+              "reasoning": "The default backbone — perfectly matches the primary traveler profile",
               "price": { "amount": 15, "currency": "EUR" },
-              "location": { "lat": 48.8566, "lng": 2.3522, "address": "Full street address, City" },
+              "location": { "lat": 38.7169, "lng": -9.1399, "address": "Full street address, City" },
               "openingHours": "08:00-22:00",
               "phoneNumber": "+XX XX XX XX XX"
             },
             {
               "id": "d1_b1_o2",
               "tier": "SMART-VALUE",
-              "title": "Another specific venue",
-              "description": "...",
-              "reasoning": "...",
+              "title": "High-quality venue at lower cost",
+              "description": "Same neighbourhood, significantly cheaper, still highly rated",
+              "reasoning": "Smart hack: near-identical quality, lower spend, saves budget for dinner",
               "price": { "amount": 8, "currency": "EUR" },
-              "location": { "lat": 48.857, "lng": 2.353, "address": "..." },
+              "location": { "lat": 38.717, "lng": -9.140, "address": "..." },
+              "openingHours": "...",
+              "phoneNumber": "..."
+            },
+            {
+              "id": "d1_b1_o3",
+              "tier": "PREMIUM",
+              "title": "Luxury/top-tier venue",
+              "description": "Best-in-class, exclusive, elevated experience",
+              "reasoning": "For when the traveler wants to treat themselves — Michelin-worthy or 5-star equivalent",
+              "price": { "amount": 45, "currency": "EUR" },
+              "location": { "lat": 38.718, "lng": -9.141, "address": "..." },
+              "openingHours": "...",
+              "phoneNumber": "..."
+            },
+            {
+              "id": "d1_b1_o4",
+              "tier": "INDEPENDENT",
+              "title": "Local hidden-gem name",
+              "description": "Off-the-beaten-path, no tourist traps, beloved by locals",
+              "reasoning": "Avoids all chains and mainstream spots — authentic local experience",
+              "price": { "amount": 10, "currency": "EUR" },
+              "location": { "lat": 38.716, "lng": -9.139, "address": "..." },
               "openingHours": "...",
               "phoneNumber": "..."
             }
@@ -72,26 +102,44 @@ const SCHEMA_BLOCK = `
   ]
 }
 
-=== RULES ===
+=== THE FOUR OPTION TIERS — MANDATORY ON EVERY BLOCK ===
+
+Every block MUST contain EXACTLY 4 options in this order:
+
+1. ANCHOR — The absolute best-fit baseline for this specific trip archetype and traveler profile.
+   The Orchestrator selects this as the default. It is the logistical and mathematical anchor
+   around which the rest of the day is built. It must be highly rated and perfectly suited to
+   the primary traveler type (family-friendly, solo-friendly, etc.).
+
+2. SMART-VALUE — The optimized cost/quality/logistics balance.
+   High-tier quality at a significantly reduced price. Minimizes transit time or spend without
+   sacrificing comfort. This is the "smart hack" for travelers who want the most value.
+
+3. PREMIUM — The luxury upgrade option.
+   Top-tier, exclusive, elevated. Think Michelin-starred restaurants, 5-star hotels, business
+   class transfers, private tours. Still respects the geographic routing of the day.
+
+4. INDEPENDENT — The off-the-beaten-path local gem.
+   Completely avoids tourist traps and corporate chains. Local secrets, boutique stays,
+   hidden-gem dining, cultural authenticity. For travelers who want to live like a local.
+
+=== BLOCK RULES ===
 EVERY day must include ALL of these block categories:
   - DINING × 3: breakfast (08:00-09:30), lunch (12:30-14:00), dinner (19:30-21:00)
   - ACTIVITIES × 1-2: morning activity, afternoon activity
-  - STAYS × 1: accommodation block (scheduledTime: "21:30" or "check-in time")
+  - STAYS × 1: accommodation block (scheduledTime: "21:30" or check-in time)
   - TRANSPORT × 2+: transfer between each major location change
 
-EVERY block must have EXACTLY 2 options (3 if premium variant makes sense).
-Option tiers: first = ANCHOR (best recommendation), second = SMART-VALUE (budget/alt), third = PREMIUM or INDEPENDENT.
-
 EVERY option must have:
-  - Real, specific venue name (not "a local café")
+  - Real, specific venue/place name (never "a local café" or "nearby restaurant")
   - Real approximate coordinates (lat/lng) for the destination city
   - Realistic price for the budget tier
-  - Genuine reasoning tied to this specific traveler's profile
+  - Genuine reasoning tied to THIS specific traveler's profile
+  - openingHours and phoneNumber for DINING and ACTIVITIES options
 
 scheduledTime must progress realistically through the day.
 Add 20-30 min buffer between morning→afternoon, afternoon→evening.
-
-TRANSPORT block options must describe how to get from A to B (include mode, duration, from/to names).
+TRANSPORT options: include mode of transport, duration, and from/to place names.
 `;
 
 function buildUserPrompt(brief: TripBrief): string {
@@ -125,7 +173,8 @@ ASSUMPTIONS ALREADY MADE (echo these in inferenceChain):
 ${assumptionsList || "  (none)"}
 
 Generate the complete ${numDays}-day itinerary now. Start date is ${start}.
-Provide EXACTLY ${numDays} day objects.`;
+Provide EXACTLY ${numDays} day objects, each with AT LEAST 8 blocks (3 DINING + 2 ACTIVITIES + 1 STAYS + 2 TRANSPORT).
+Every block must have EXACTLY 4 options: ANCHOR, SMART-VALUE, PREMIUM, INDEPENDENT.`;
 }
 
 function extractJSON(text: string): string {
@@ -144,6 +193,7 @@ export async function synthesizePlan(
   _data: NormalizedResult[],
   llm: LLMClient,
   cb: StreamCallbacks,
+  planId?: string,
 ): Promise<TripPlan> {
   cb.onThought(`Composing your itinerary for ${brief.facts.destination}…`);
   cb.onThought(`Writing a ${brief.facts.partyAdults ?? 2}-person plan, budget: ${brief.facts.budgetTier}…`);
@@ -159,7 +209,10 @@ export async function synthesizePlan(
       try {
         const json = extractJSON(text);
         const raw = JSON.parse(json) as Record<string, unknown>;
-        return Array.isArray(raw["days"]) && (raw["days"] as unknown[]).length > 0;
+        const days = raw["days"] as Array<{ blocks?: unknown[] }> | undefined;
+        if (!Array.isArray(days) || days.length === 0) return false;
+        // Every day must have at least 4 blocks (minimum viable: 3 dining + 1 activity)
+        return days.every((d) => Array.isArray(d.blocks) && d.blocks.length >= 4);
       } catch {
         return false;
       }
@@ -176,8 +229,8 @@ export async function synthesizePlan(
     throw new Error(`Synthesis: LLM returned non-JSON. Preview: ${res.text.slice(0, 300)}`);
   }
 
-  // Inject planId (never let the LLM set it)
-  raw["planId"] = randomUUID();
+  // Inject planId — use caller-supplied ID so the observer subscription matches
+  raw["planId"] = planId ?? randomUUID();
 
   const plan = TripPlanSchema.parse(raw);
 

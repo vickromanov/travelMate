@@ -48,7 +48,7 @@ export async function planRoutes(app: FastifyInstance) {
         unsubscribe();
         planBus.delete(planId);
       },
-    }).then(() => {
+    }, planId).then(() => {
       // Pipeline done — unsubscribe after a brief delay to let SSE drain
       setTimeout(() => { unsubscribe(); planBus.delete(planId); }, 30_000);
     });
@@ -65,6 +65,12 @@ export async function planRoutes(app: FastifyInstance) {
     reply.raw.setHeader("Cache-Control", "no-cache");
     reply.raw.setHeader("Connection", "keep-alive");
     reply.raw.setHeader("X-Accel-Buffering", "no");
+    // @fastify/cors only runs on Fastify's response pipeline; raw writes bypass it.
+    const origin = request.headers.origin;
+    const allowed = process.env.CORS_ORIGIN ?? "http://localhost:3000";
+    if (origin === allowed) {
+      reply.raw.setHeader("Access-Control-Allow-Origin", allowed);
+    }
     reply.raw.flushHeaders?.();
 
     const onThought = (thought: string) => sseWrite(reply, "thought", { text: thought });
