@@ -7,7 +7,7 @@
   "exports": {
     "./tsconfig.lib.json": "./tsconfig.lib.json",
     "./eslint": "./eslint.preset.js",
-    "./vitest": "./vitest.preset.ts"
+    "./vitest": "./vitest.preset.js"
   },
   "devDependencies": {
     "eslint": "^9.10.0",
