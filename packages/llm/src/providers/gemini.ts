@@ -46,7 +46,7 @@ export const geminiProvider: LLMProvider = {
           model: modelId,
           systemInstruction,
           generationConfig: {
-            maxOutputTokens: isSynthesis ? 16000 : 4096,
+            maxOutputTokens: isSynthesis ? 65536 : 4096,
             temperature: isSynthesis ? 0.7 : 0.3,
           },
         });

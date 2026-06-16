@@ -60,7 +60,8 @@ Do NOT stop after 1 block. Generate ALL blocks for the day before moving to the 
               "price": { "amount": 15, "currency": "EUR" },
               "location": { "lat": 38.7169, "lng": -9.1399, "address": "Full street address, City" },
               "openingHours": "08:00-22:00",
-              "phoneNumber": "+XX XX XX XX XX"
+              "phoneNumber": "+XX XX XX XX XX",
+              "link": "https://www.venueofficialwebsite.com"
             },
             {
               "id": "d1_b1_o2",
@@ -136,6 +137,16 @@ EVERY option must have:
   - Realistic price for the budget tier
   - Genuine reasoning tied to THIS specific traveler's profile
   - openingHours and phoneNumber for DINING and ACTIVITIES options
+  - link: the single most useful URL for this option, chosen by category:
+      DINING    → official restaurant website (e.g. "https://restaurantname.com") if well-known,
+                  otherwise Google Maps search: "https://www.google.com/maps/search/?api=1&query=NAME+CITY"
+      ACTIVITIES → official venue/attraction website (e.g. "https://museu.gov.pt"),
+                  otherwise Google Maps: "https://www.google.com/maps/search/?api=1&query=NAME+CITY"
+      STAYS      → hotel official website or booking page
+      TRANSPORT  → Google Maps directions URL:
+                  "https://www.google.com/maps/dir/?api=1&origin=FROM_NAME&destination=TO_NAME&travelmode=MODE"
+                  where MODE is: walking, transit, driving, or bicycling
+      LOGISTICS  → Google Maps search for the relevant place
 
 scheduledTime must progress realistically through the day.
 Add 20-30 min buffer between morning→afternoon, afternoon→evening.
@@ -211,8 +222,8 @@ export async function synthesizePlan(
         const raw = JSON.parse(json) as Record<string, unknown>;
         const days = raw["days"] as Array<{ blocks?: unknown[] }> | undefined;
         if (!Array.isArray(days) || days.length === 0) return false;
-        // Every day must have at least 4 blocks (minimum viable: 3 dining + 1 activity)
-        return days.every((d) => Array.isArray(d.blocks) && d.blocks.length >= 4);
+        // Every day must have at least 3 blocks (1 dining + 1 activity + 1 other)
+        return days.every((d) => Array.isArray(d.blocks) && d.blocks.length >= 3);
       } catch {
         return false;
       }
@@ -232,7 +243,16 @@ export async function synthesizePlan(
   // Inject planId — use caller-supplied ID so the observer subscription matches
   raw["planId"] = planId ?? randomUUID();
 
-  const plan = TripPlanSchema.parse(raw);
+  let plan;
+  try {
+    plan = TripPlanSchema.parse(raw);
+  } catch (err) {
+    // Log the first Zod issue path for diagnosis
+    const issues = (err as { issues?: Array<{ path: unknown[]; message: string }> }).issues;
+    const first = issues?.[0];
+    console.error(`[synthesis] Zod parse failed — path: ${JSON.stringify(first?.path)}, msg: ${first?.message}`);
+    throw err;
+  }
 
   cb.onThought(`Plan ready — ${plan.days.length} days, ${plan.days.reduce((s, d) => s + d.blocks.length, 0)} blocks.`);
 

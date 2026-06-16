@@ -12,6 +12,7 @@ interface TravelOption {
   reasoning: string; price: Money; location: GeoLocation;
   openingHours?: string; phoneNumber?: string;
   bookingUrl?: string; scheduledTime?: string; durationMinutes?: number;
+  link?: string;
 }
 interface Block {
   blockId: string; category: string; scheduledTime: string;
@@ -195,9 +196,21 @@ function OptionCard({ opt, selected }: { opt: TravelOption; selected: boolean })
           >
             {TIER_LABEL[opt.tier] ?? opt.tier}
           </span>
-          <span style={{ fontWeight: selected ? 600 : 400, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {opt.title}
-          </span>
+          <a
+            href={opt.link ?? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(opt.title + " " + opt.location.address)}`}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              fontWeight: selected ? 600 : 400, fontSize: 14,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              color: "inherit", textDecoration: "none",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.textDecoration = "underline"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.textDecoration = "none"; }}
+          >
+            {opt.title} ↗
+          </a>
         </div>
         <span style={{ color: "var(--text-muted)", flexShrink: 0, fontSize: 13 }}>
           {opt.price.amount > 0 ? `${opt.price.currency} ${opt.price.amount}` : "Free"} {open ? "▲" : "▼"}

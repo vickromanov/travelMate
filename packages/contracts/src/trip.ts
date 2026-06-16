@@ -70,6 +70,8 @@ export const TravelOptionSchema = z.object({
   openingHours: optStr(),
   phoneNumber: optStr(),
   affiliationRef: optStr(),
+  /** Primary clickable link for the card header. Official site, Google Maps, or directions. */
+  link: optStr(),
 });
 export type TravelOption = z.infer<typeof TravelOptionSchema>;
 
