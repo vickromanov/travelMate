@@ -15,10 +15,13 @@
     "clean": "rm -rf dist .turbo coverage"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@google/generative-ai": "^0.24.1",
     "@travelmate/contracts": "workspace:*"
   },
   "devDependencies": {
     "@travelmate/config": "workspace:*",
+    "@types/node": "^22",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }

@@ -5,6 +5,17 @@
 import { z } from "zod";
 import { BudgetTierSchema, GeoLocationSchema, MoneySchema } from "./common.js";
 
+// LLMs return null for missing optional fields — coerce null → undefined everywhere.
+const optStr = () => z.string().nullish().transform((v) => v ?? undefined);
+const optDate = () =>
+  z
+    .string()
+    .nullish()
+    .transform((v) => v ?? undefined)
+    .pipe(z.string().date().optional());
+const optNum = (schema: z.ZodNumber) =>
+  schema.nullish().transform((v) => v ?? undefined);
+
 /* ── UX → Orchestrator: the minimum validated input (about_travelMate.md §8) ── */
 
 export const CrucialInfoSchema = z.object({
@@ -13,12 +24,12 @@ export const CrucialInfoSchema = z.object({
   travelerDescription: z.string().min(1),
   tripType: z.string().min(1),
   budgetTier: BudgetTierSchema,
-  origin: z.string().optional(),
-  startDate: z.string().date().optional(),
-  endDate: z.string().date().optional(),
-  partyAdults: z.number().int().positive().optional(),
-  partyChildren: z.number().int().nonnegative().optional(),
-  freeformText: z.string().optional(),
+  origin: optStr(),
+  startDate: optDate(),
+  endDate: optDate(),
+  partyAdults: optNum(z.number().int().positive()),
+  partyChildren: optNum(z.number().int().nonnegative()),
+  freeformText: optStr(),
 });
 export type CrucialInfo = z.infer<typeof CrucialInfoSchema>;
 
@@ -52,14 +63,15 @@ export const TravelOptionSchema = z.object({
   reasoning: z.string(),
   price: MoneySchema,
   location: GeoLocationSchema,
-  scheduledTime: z.string().optional(),
-  durationMinutes: z.number().int().positive().optional(),
-  bookingRequired: z.boolean().optional(),
-  bookingUrl: z.string().url().optional(),
-  openingHours: z.string().optional(),
-  phoneNumber: z.string().optional(),
-  /** Source/affiliate provenance — present on every option. */
-  affiliationRef: z.string().optional(),
+  scheduledTime: optStr(),
+  durationMinutes: optNum(z.number().int().positive()),
+  bookingRequired: z.boolean().nullish().transform((v) => v ?? undefined),
+  bookingUrl: optStr(),
+  openingHours: optStr(),
+  phoneNumber: optStr(),
+  affiliationRef: optStr(),
+  /** Primary clickable link for the card header. Official site, Google Maps, or directions. */
+  link: optStr(),
 });
 export type TravelOption = z.infer<typeof TravelOptionSchema>;
 
@@ -68,10 +80,11 @@ export const ItineraryBlockSchema = z.object({
   category: z.enum(["STAYS", "TRANSPORT", "DINING", "ACTIVITIES", "LOGISTICS"]),
   timeSlot: z
     .enum(["MORNING", "AFTERNOON", "EVENING", "OVERNIGHT", "ALL_DAY"])
-    .optional(),
-  scheduledTime: z.string(), // required — the day must progress realistically
-  label: z.string().optional(),
-  isOptional: z.boolean().optional(),
+    .nullish()
+    .transform((v) => v ?? undefined),
+  scheduledTime: z.string(),
+  label: optStr(),
+  isOptional: z.boolean().nullish().transform((v) => v ?? undefined),
   selectedOptionId: z.string().min(1),
   /**
    * Drives the Re-flow Engine (H4). "none" = independent. Otherwise an expression
@@ -79,7 +92,7 @@ export const ItineraryBlockSchema = z.object({
    * location → re-flow when the hotel changes). projectStructure.md §2 Refinement 1.
    */
   dependencyLogic: z.string(),
-  options: z.array(TravelOptionSchema).min(2).max(4),
+  options: z.array(TravelOptionSchema).min(4).max(4),
 });
 export type ItineraryBlock = z.infer<typeof ItineraryBlockSchema>;
 
@@ -89,7 +102,7 @@ export const DayPlanSchema = z.object({
   title: z.string(),
   theme: z.string(),
   dailyTips: z.array(z.string()),
-  startLocation: z.string().optional(),
+  startLocation: optStr(),
   blocks: z.array(ItineraryBlockSchema),
 });
 export type DayPlan = z.infer<typeof DayPlanSchema>;

@@ -1,12 +1,14 @@
 /**
  * Wires the four stages into the unidirectional flow (projectStructure.md §5).
- * Order is load-bearing: savePlan() is ALWAYS the final write; the UX learns of
- * the result via the Database Observer, never a callback (no onComplete).
+ * savePlan() is ALWAYS the final write; the UX learns of the result via the
+ * Database Observer, never a callback (no onComplete).
  */
-import { NotImplemented } from "@travelmate/contracts";
 import type { CrucialInfo, StreamCallbacks } from "@travelmate/contracts";
 import type { Database } from "@travelmate/database";
 import type { LLMClient } from "@travelmate/llm";
+import { extractIntent } from "./intent.js";
+import { buildFetchPlan, resolveData } from "./planner.js";
+import { synthesizePlan } from "./synthesis.js";
 
 export interface Deps {
   db: Database;
@@ -16,14 +18,31 @@ export interface Deps {
 /**
  * Full plan pipeline:
  *   1 extractIntent → onThought(inferenceChain)   (before any fetch — P1)
- *   2 buildFetchPlan → resolveData (freshness check, parallel, only-stale)
+ *   2 buildFetchPlan → resolveData (freshness check, only-stale)
  *   3 synthesizePlan
- *   4 db.savePlan()  ← last write; Observer notifies the UX
+ *   4 db.plans.savePlan()  ← last write; observer notifies the UX
  */
 export async function runPlanPipeline(
-  _input: CrucialInfo,
-  _deps: Deps,
-  _cb: StreamCallbacks,
+  input: CrucialInfo,
+  deps: Deps,
+  cb: StreamCallbacks,
+  planId?: string,
 ): Promise<void> {
-  throw new NotImplemented("orchestrator.runPlanPipeline");
+  try {
+    // Stage 1: intent
+    const brief = await extractIntent(input, deps.llm, cb);
+
+    // Stage 2: fetch (MVP: empty)
+    const fetchPlan = await buildFetchPlan(brief);
+    const data = await resolveData(fetchPlan, deps.db);
+
+    // Stage 3: synthesis — use caller-supplied planId so observer subscription matches
+    const plan = await synthesizePlan(brief, data, deps.llm, cb, planId);
+
+    // Stage 4: persist + notify (order matters — save before notify)
+    await deps.db.plans.savePlan(plan);
+    deps.db.observer.notify(plan);
+  } catch (err) {
+    cb.onError(err instanceof Error ? err : new Error(String(err)));
+  }
 }
