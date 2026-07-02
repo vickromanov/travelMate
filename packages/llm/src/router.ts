@@ -17,27 +17,27 @@ export const MODEL_TABLE: Record<string, Record<ModelTier, string>> = {
 };
 
 /**
- * Gemini free-tier cascade — ordered most-to-least capable.
- * On any error (503, 429, 404) → skip to next model.
- * Verified against Google AI Studio rate limits 2026-06-10.
+ * Gemini free-tier cascade — ordered by RPD capacity to maximise daily throughput.
+ * On any error (503, 429, 404, fetch-fail) → skip to next model.
+ * Updated 2026-06-24 from API rate-limit dashboard (TravelMateVictor project).
  *
  * RPD = requests per day on free tier:
- *   gemini-3.5-flash              → 20  (newest generation — try first; skip on 404)
- *   gemini-3.1-flash-lite-preview → 500 (highest daily free quota)
- *   gemini-3-flash-preview        → 20
- *   gemini-2.5-flash              → 20  (proven working)
- *   gemini-2.5-flash-lite         → 20
- *   gemma-4-31b-it                → 1,500 (unlimited TPM — best high-volume fallback)
- *   gemma-4-26b-a4b-it            → 1,500 (unlimited TPM)
+ *   gemini-3.1-flash-lite-preview → 500  RPD, 15 RPM  (best daily capacity)
+ *   gemma-4-31b-it                → 1500 RPD, 15 RPM, unlimited TPM
+ *   gemma-4-26b-a4b-it            → 1500 RPD, 15 RPM, unlimited TPM
+ *   gemini-2.5-flash              → 20   RPD, 5  RPM  (best quality — conserve)
+ *   gemini-2.5-flash-lite         → 20   RPD, 10 RPM
+ *   gemini-3-flash-preview        → 20   RPD, 5  RPM
+ *   gemini-3.5-flash              → 20   RPD, 5  RPM
  */
 export const GEMINI_CASCADE: readonly string[] = [
-  "gemini-3.5-flash",
   "gemini-3.1-flash-lite-preview",
-  "gemini-3-flash-preview",
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
   "gemma-4-31b-it",
   "gemma-4-26b-a4b-it",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-3-flash-preview",
+  "gemini-3.5-flash",
 ] as const;
 
 /** Default tier per stage (projectStructure.md §7.2). Escalation goes fast→mid→frontier. */
