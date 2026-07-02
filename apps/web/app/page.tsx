@@ -89,24 +89,35 @@ function updateDependentTransport(plan: TripPlan, oldHotelName: string, newHotel
   }
 }
 
-// ── Category metadata ─────────────────────────────────────────────────────────
+// ── Category & tier metadata ──────────────────────────────────────────────────
 
-const CAT_ICON: Record<string, string> = {
-  DINING: "🍽️", STAYS: "🏨", TRANSPORT: "🚆", ACTIVITIES: "🎯", LOGISTICS: "📋",
+const CAT_META: Record<string, { icon: string; color: string; soft: string; label: string }> = {
+  STAYS:      { icon: "🏨", color: "var(--cat-stays)",      soft: "var(--cat-stays-soft)",      label: "Stay" },
+  DINING:     { icon: "🍽️", color: "var(--cat-dining)",     soft: "var(--cat-dining-soft)",     label: "Dining" },
+  TRANSPORT:  { icon: "🚆", color: "var(--cat-transport)",  soft: "var(--cat-transport-soft)",  label: "Transport" },
+  ACTIVITIES: { icon: "🎯", color: "var(--cat-activities)", soft: "var(--cat-activities-soft)", label: "Activity" },
+  LOGISTICS:  { icon: "📋", color: "var(--cat-logistics)",  soft: "var(--cat-logistics-soft)",  label: "Logistics" },
 };
-const TIER_COLOR: Record<string, string> = {
-  ANCHOR: "#6c63ff",
-  "SMART-VALUE": "#4ade80",
-  PREMIUM: "#f59e0b",
-  INDEPENDENT: "#60a5fa",
+const catMeta = (c: string) => CAT_META[c] ?? CAT_META.LOGISTICS!;
+
+const TIER_META: Record<string, { label: string; color: string; soft: string }> = {
+  ANCHOR:        { label: "⚓ Anchor",     color: "var(--tier-anchor)",      soft: "rgba(28,36,51,0.08)" },
+  "SMART-VALUE": { label: "💡 Smart value", color: "var(--tier-value)",      soft: "var(--cat-activities-soft)" },
+  PREMIUM:       { label: "👑 Premium",    color: "var(--tier-premium)",     soft: "#f8f1da" },
+  INDEPENDENT:   { label: "🧭 Local gem",  color: "var(--tier-independent)", soft: "var(--teal-soft)" },
 };
 
-const TIER_LABEL: Record<string, string> = {
-  ANCHOR: "⚓ Anchor",
-  "SMART-VALUE": "💡 Smart Value",
-  PREMIUM: "👑 Premium",
-  INDEPENDENT: "🧭 Independent",
-};
+function fmtMoney(m: Money): string {
+  return m.amount > 0 ? `${m.currency} ${m.amount.toLocaleString()}` : "Free";
+}
+
+function fmtDate(iso: string, opts: Intl.DateTimeFormatOptions): string {
+  try {
+    return new Date(iso + "T00:00:00").toLocaleDateString("en-GB", opts);
+  } catch {
+    return iso;
+  }
+}
 
 // ── Input form ────────────────────────────────────────────────────────────────
 
@@ -121,63 +132,55 @@ function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
   const [text, setText] = useState("");
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", padding: "64px 24px" }}>
-      <div style={{ marginBottom: 40 }}>
-        <h1 style={{ fontSize: 42, fontWeight: 800, lineHeight: 1.1, marginBottom: 12 }}>
-          TravelMate
+    <div style={{ maxWidth: 760, margin: "0 auto", padding: "72px 24px" }}>
+      <div style={{ textAlign: "center", marginBottom: 44, animation: "fadeUp 0.5s ease" }}>
+        <div style={{ fontSize: 13, letterSpacing: 3, textTransform: "uppercase", color: "var(--teal)", fontWeight: 600, marginBottom: 14 }}>
+          ✈ Your AI travel agent
+        </div>
+        <h1 style={{ fontSize: 54, fontWeight: 900, lineHeight: 1.05, marginBottom: 14, color: "var(--navy)" }}>
+          Where to next?
         </h1>
-        <p style={{ color: "var(--text-muted)", fontSize: 17 }}>
-          Describe your trip. Get a complete, zero-thinking itinerary.
+        <p style={{ color: "var(--ink-soft)", fontSize: 17, maxWidth: 460, margin: "0 auto" }}>
+          Describe your trip in your own words. Get a complete, zero-thinking
+          itinerary — every meal, ride and moment planned.
         </p>
       </div>
 
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Who's going, where, when, what kind of trip — describe it in your own words…"
-        style={{
-          width: "100%", minHeight: 120, padding: 16,
-          background: "var(--surface)", border: "1px solid var(--border)",
-          borderRadius: "var(--radius)", color: "var(--text)",
-          resize: "vertical", outline: "none", lineHeight: 1.6, fontSize: 15,
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim()) {
-            onSubmit(text.trim());
-          }
-        }}
-      />
+      <div className="card" style={{ padding: 8, boxShadow: "var(--shadow-lg)", animation: "fadeUp 0.5s ease 0.08s backwards" }}>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Who's going, where, when, what kind of trip — tell me everything…"
+          style={{
+            width: "100%", minHeight: 120, padding: "16px 18px",
+            background: "transparent", border: "none",
+            resize: "vertical", outline: "none", lineHeight: 1.6, fontSize: 15.5,
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim()) {
+              onSubmit(text.trim());
+            }
+          }}
+        />
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 8px 8px" }}>
+          <button
+            className="btn-primary"
+            onClick={() => text.trim() && onSubmit(text.trim())}
+            disabled={!text.trim()}
+            style={{ padding: "12px 30px", fontSize: 15 }}
+          >
+            Plan my trip →
+          </button>
+        </div>
+      </div>
 
-      <button
-        onClick={() => text.trim() && onSubmit(text.trim())}
-        disabled={!text.trim()}
-        style={{
-          marginTop: 12, padding: "12px 28px",
-          background: text.trim() ? "var(--accent)" : "var(--surface2)",
-          color: text.trim() ? "#fff" : "var(--text-muted)",
-          border: "none", borderRadius: "var(--radius)",
-          fontWeight: 600, fontSize: 15, transition: "all 0.15s",
-        }}
-      >
-        Plan my trip →
-      </button>
-
-      <div style={{ marginTop: 32 }}>
-        <p style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 12 }}>Try an example:</p>
+      <div style={{ marginTop: 36, animation: "fadeUp 0.5s ease 0.16s backwards" }}>
+        <p style={{ color: "var(--muted)", fontSize: 12.5, marginBottom: 12, textAlign: "center", letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
+          Or try one of these
+        </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {EXAMPLES.map((ex) => (
-            <button
-              key={ex}
-              onClick={() => setText(ex)}
-              style={{
-                textAlign: "left", padding: "10px 14px",
-                background: "var(--surface)", border: "1px solid var(--border)",
-                borderRadius: 8, color: "var(--text-muted)", fontSize: 13,
-                cursor: "pointer", transition: "border-color 0.1s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-              onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-            >
+            <button key={ex} className="example-chip" onClick={() => setText(ex)} style={{ padding: "11px 16px" }}>
               {ex}
             </button>
           ))}
@@ -194,72 +197,90 @@ function ThinkingScreen({ thoughts }: { thoughts: string[] }) {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [thoughts]);
 
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: "64px 24px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32 }}>
-        <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", animation: "pulse 1.4s infinite" }} />
-        <h2 style={{ fontSize: 22, fontWeight: 700 }}>Planning your trip…</h2>
+    <div style={{ maxWidth: 620, margin: "0 auto", padding: "72px 24px" }}>
+      <div style={{ textAlign: "center", marginBottom: 36 }}>
+        <div style={{ display: "inline-flex", gap: 6, marginBottom: 18 }}>
+          {[0, 1, 2].map((i) => (
+            <span key={i} style={{
+              width: 9, height: 9, borderRadius: "50%", background: "var(--accent)",
+              animation: `pulseDot 1.3s ease ${i * 0.18}s infinite`,
+            }} />
+          ))}
+        </div>
+        <h2 style={{ fontSize: 30, fontWeight: 700, color: "var(--navy)" }}>Crafting your journey…</h2>
+        <p style={{ color: "var(--muted)", fontSize: 14, marginTop: 6 }}>
+          Real dates, real venues, real logistics — this takes a moment.
+        </p>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {thoughts.map((t, i) => (
-          <div
-            key={i}
-            style={{
-              padding: "10px 14px", background: "var(--surface)",
-              border: "1px solid var(--border)", borderRadius: 8,
-              fontSize: 14, color: i === thoughts.length - 1 ? "var(--text)" : "var(--text-muted)",
-              animation: "fadeIn 0.3s ease",
-            }}
-          >
-            {t}
-          </div>
-        ))}
+        {thoughts.map((t, i) => {
+          const latest = i === thoughts.length - 1;
+          return (
+            <div
+              key={i}
+              style={{
+                padding: "11px 16px",
+                background: latest ? "var(--surface)" : "transparent",
+                border: `1px solid ${latest ? "var(--border)" : "transparent"}`,
+                borderRadius: 10,
+                boxShadow: latest ? "var(--shadow-sm)" : "none",
+                fontSize: 14,
+                color: latest ? "var(--ink)" : "var(--muted)",
+                animation: "fadeUp 0.3s ease",
+                display: "flex", gap: 10, alignItems: "baseline",
+              }}
+            >
+              <span style={{ color: latest ? "var(--accent)" : "var(--border-strong)", flexShrink: 0 }}>
+                {latest ? "●" : "✓"}
+              </span>
+              {t}
+            </div>
+          );
+        })}
         <div ref={bottomRef} />
       </div>
-
-      <style>{`
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-        @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
-      `}</style>
     </div>
   );
 }
 
-// ── Itinerary view ────────────────────────────────────────────────────────────
+// ── Option card ───────────────────────────────────────────────────────────────
 
 function OptionCard({ opt, selected, onSelect }: { opt: TravelOption; selected: boolean; onSelect: () => void }) {
   const [open, setOpen] = useState(false);
+  const tier = TIER_META[opt.tier] ?? { label: opt.tier, color: "var(--ink-soft)", soft: "var(--bg-soft)" };
+
   return (
     <div
       style={{
-        border: `1px solid ${selected ? "var(--accent)" : "var(--border)"}`,
-        borderRadius: 8, overflow: "hidden",
-        background: selected ? "rgba(108,99,255,0.05)" : "var(--surface2)",
-        marginTop: 6,
+        border: `1.5px solid ${selected ? "var(--accent)" : "var(--border)"}`,
+        borderRadius: 11, overflow: "hidden",
+        background: selected ? "var(--accent-soft)" : "var(--surface)",
+        marginTop: 8,
       }}
     >
       <div
+        className={selected ? undefined : "option-row"}
         role="button"
         tabIndex={0}
         onClick={() => setOpen(!open)}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(!open); } }}
         style={{
-          width: "100%", padding: "10px 12px", background: "transparent",
-          border: "none", display: "flex", justifyContent: "space-between",
-          alignItems: "center", gap: 8, textAlign: "left", color: "var(--text)",
+          width: "100%", padding: "11px 14px",
+          display: "flex", justifyContent: "space-between",
+          alignItems: "center", gap: 10, textAlign: "left",
           cursor: "pointer", userSelect: "none",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
           <span
             style={{
-              fontSize: 11, fontWeight: 700, padding: "2px 8px",
-              borderRadius: 4, color: "#fff",
-              background: TIER_COLOR[opt.tier] ?? "var(--accent)",
-              flexShrink: 0, whiteSpace: "nowrap",
+              fontSize: 11, fontWeight: 700, padding: "3px 10px",
+              borderRadius: 999, color: tier.color, background: tier.soft,
+              flexShrink: 0, whiteSpace: "nowrap", letterSpacing: 0.2,
             }}
           >
-            {TIER_LABEL[opt.tier] ?? opt.tier}
+            {tier.label}
           </span>
           <a
             href={opt.link ?? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(opt.title + " " + opt.location.address)}`}
@@ -267,57 +288,53 @@ function OptionCard({ opt, selected, onSelect }: { opt: TravelOption; selected: 
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
             style={{
-              fontWeight: selected ? 600 : 400, fontSize: 14,
+              fontWeight: selected ? 650 : 500, fontSize: 14, color: "var(--ink)",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              color: "inherit", textDecoration: "none",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.textDecoration = "underline"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.textDecoration = "none"; }}
           >
-            {opt.title} ↗
+            {opt.title} <span style={{ color: "var(--teal)", fontSize: 12 }}>↗</span>
           </a>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <span style={{ color: "var(--text-muted)", fontSize: 13 }}>
-            {opt.price.amount > 0 ? `${opt.price.currency} ${opt.price.amount}` : "Free"}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <span style={{ color: "var(--ink-soft)", fontSize: 13.5, fontWeight: 600 }}>
+            {fmtMoney(opt.price)}
           </span>
           {!selected && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onSelect(); }}
-              style={{
-                padding: "3px 10px", fontSize: 11, fontWeight: 600,
-                background: "var(--accent)", color: "#fff", border: "none",
-                borderRadius: 4, cursor: "pointer", whiteSpace: "nowrap",
-              }}
-            >
+            <button className="select-btn" onClick={(e) => { e.stopPropagation(); onSelect(); }}>
               Select
             </button>
           )}
           {selected && (
-            <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 600 }}>✓ Active</span>
+            <span style={{
+              fontSize: 12, color: "#fff", fontWeight: 700, background: "var(--accent)",
+              padding: "4px 12px", borderRadius: 999, whiteSpace: "nowrap",
+            }}>
+              ✓ Chosen
+            </span>
           )}
-          <span style={{ color: "var(--text-muted)", fontSize: 11 }}>{open ? "▲" : "▼"}</span>
+          <span style={{ color: "var(--muted)", fontSize: 10 }}>{open ? "▲" : "▼"}</span>
         </div>
       </div>
 
       {open && (
-        <div style={{ padding: "0 12px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>{opt.description}</p>
-          <p style={{ fontSize: 13, color: "var(--accent2)", fontStyle: "italic" }}>
-            💡 {opt.reasoning}
-          </p>
-          {opt.location.address && (
-            <p style={{ fontSize: 12, color: "var(--text-muted)" }}>📍 {opt.location.address}</p>
+        <div style={{ padding: "2px 14px 14px", display: "flex", flexDirection: "column", gap: 7, borderTop: "1px dashed var(--border)" }}>
+          <p style={{ fontSize: 13.5, color: "var(--ink-soft)", paddingTop: 10 }}>{opt.description}</p>
+          {opt.reasoning && (
+            <p style={{
+              fontSize: 13, color: "var(--teal)", background: "var(--teal-soft)",
+              padding: "8px 12px", borderRadius: 8, lineHeight: 1.5,
+            }}>
+              💡 {opt.reasoning}
+            </p>
           )}
-          {opt.openingHours && (
-            <p style={{ fontSize: 12, color: "var(--text-muted)" }}>🕐 {opt.openingHours}</p>
-          )}
-          {opt.phoneNumber && (
-            <p style={{ fontSize: 12, color: "var(--text-muted)" }}>📞 {opt.phoneNumber}</p>
-          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5, color: "var(--muted)" }}>
+            {opt.location.address && <span>📍 {opt.location.address}</span>}
+            {opt.openingHours && <span>🕐 {opt.openingHours}</span>}
+            {opt.phoneNumber && <span>📞 {opt.phoneNumber}</span>}
+          </div>
           {opt.bookingUrl && (
-            <a href={opt.bookingUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
-              Book →
+            <a href={opt.bookingUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600 }}>
+              Book now →
             </a>
           )}
         </div>
@@ -326,74 +343,144 @@ function OptionCard({ opt, selected, onSelect }: { opt: TravelOption; selected: 
   );
 }
 
-function BlockCard({ block, onSwap }: { block: Block; onSwap: (blockId: string, optionId: string) => void }) {
+// ── Timeline block ────────────────────────────────────────────────────────────
+
+function TimelineBlock({ block, isLast, onSwap }: { block: Block; isLast: boolean; onSwap: (blockId: string, optionId: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const selected = block.options.find((o) => o.id === block.selectedOptionId) ?? block.options[0];
+  const cat = catMeta(block.category);
 
   return (
-    <div
-      style={{
-        background: "var(--surface)", border: "1px solid var(--border)",
-        borderRadius: "var(--radius)", overflow: "hidden",
-      }}
-    >
-      <button
-        onClick={() => setExpanded(!expanded)}
-        style={{
-          width: "100%", padding: "12px 16px", background: "transparent", border: "none",
-          display: "flex", alignItems: "center", gap: 12, textAlign: "left", color: "var(--text)",
-        }}
-      >
-        <span style={{ fontSize: 20, flexShrink: 0 }}>{CAT_ICON[block.category] ?? "📌"}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>
-              {block.scheduledTime} — {block.label ?? selected?.title ?? block.category}
+    <div style={{ display: "grid", gridTemplateColumns: "52px 44px 1fr", alignItems: "stretch" }}>
+      {/* Time */}
+      <div style={{ paddingTop: 16, textAlign: "right", paddingRight: 4 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-soft)", fontVariantNumeric: "tabular-nums" }}>
+          {block.scheduledTime}
+        </span>
+      </div>
+
+      {/* Node + connector */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: "50%", background: cat.soft,
+          border: `2px solid ${cat.color}`, display: "flex", alignItems: "center",
+          justifyContent: "center", fontSize: 15, flexShrink: 0, marginTop: 8,
+          boxShadow: "var(--shadow-sm)", zIndex: 1,
+        }}>
+          {cat.icon}
+        </div>
+        {!isLast && <div style={{ width: 2, flex: 1, background: "var(--border)", marginTop: 4, marginBottom: -8 }} />}
+      </div>
+
+      {/* Card */}
+      <div className="card" style={{ marginBottom: 14, overflow: "hidden" }}>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          style={{
+            width: "100%", padding: "13px 16px", background: "transparent", border: "none",
+            display: "flex", alignItems: "center", gap: 12, textAlign: "left",
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+              <span style={{
+                fontSize: 10.5, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase",
+                color: cat.color,
+              }}>
+                {cat.label}
+              </span>
+            </div>
+            <div style={{ fontWeight: 650, fontSize: 15, color: "var(--ink)", lineHeight: 1.35 }}>
+              {block.label ?? selected?.title ?? block.category}
+            </div>
+            {selected && (
+              <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {selected.title}
+              </div>
+            )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            {selected && selected.price.amount > 0 && (
+              <span style={{
+                fontSize: 13, fontWeight: 700, color: "var(--ink-soft)",
+                background: "var(--bg-soft)", padding: "4px 11px", borderRadius: 999,
+              }}>
+                {fmtMoney(selected.price)}
+              </span>
+            )}
+            <span style={{
+              fontSize: 11, color: "var(--muted)", transform: expanded ? "rotate(180deg)" : "none",
+              transition: "transform 0.18s ease",
+            }}>
+              ▼
             </span>
           </div>
-          {selected && !expanded && (
-            <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>
-              {selected.title}
-              {selected.price.amount > 0 && ` · ${selected.price.currency} ${selected.price.amount}`}
-            </div>
-          )}
-        </div>
-        <span style={{ color: "var(--text-muted)", fontSize: 11 }}>{expanded ? "▲" : "▼"}</span>
-      </button>
+        </button>
 
-      {expanded && (
-        <div style={{ padding: "0 16px 16px" }}>
-          {block.options.map((opt) => (
-            <OptionCard key={opt.id} opt={opt} selected={opt.id === block.selectedOptionId} onSelect={() => onSwap(block.blockId, opt.id)} />
-          ))}
-        </div>
-      )}
+        {expanded && (
+          <div style={{ padding: "0 16px 14px" }}>
+            <p style={{ fontSize: 11.5, color: "var(--muted)", letterSpacing: 1, textTransform: "uppercase", fontWeight: 700, margin: "4px 0 2px" }}>
+              {block.options.length} swappable options
+            </p>
+            {block.options.map((opt) => (
+              <OptionCard key={opt.id} opt={opt} selected={opt.id === block.selectedOptionId} onSelect={() => onSwap(block.blockId, opt.id)} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
+// ── Day view ──────────────────────────────────────────────────────────────────
+
 function DayView({ day, onSwap }: { day: DayPlan; onSwap: (blockId: string, optionId: string) => void }) {
+  const dayTotal = day.blocks.reduce((sum, b) => {
+    const sel = b.options.find((o) => o.id === b.selectedOptionId) ?? b.options[0];
+    return sum + (sel?.price.amount ?? 0);
+  }, 0);
+  const currency = day.blocks[0]?.options[0]?.price.currency ?? "EUR";
+
   return (
-    <div>
-      <div style={{ marginBottom: 20 }}>
-        <h3 style={{ fontSize: 18, fontWeight: 700 }}>
-          Day {day.dayNumber} — {day.title}
-        </h3>
-        <p style={{ color: "var(--text-muted)", fontSize: 13 }}>{day.theme} · {day.date}</p>
+    <div style={{ animation: "fadeUp 0.35s ease" }}>
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <h3 style={{ fontSize: 26, fontWeight: 700, color: "var(--navy)" }}>
+            {day.title}
+          </h3>
+          <span style={{
+            fontSize: 13, fontWeight: 700, color: "var(--ink-soft)",
+            background: "var(--surface)", border: "1px solid var(--border)",
+            padding: "5px 14px", borderRadius: 999, whiteSpace: "nowrap",
+          }}>
+            Day total ≈ {currency} {Math.round(dayTotal).toLocaleString()}
+          </span>
+        </div>
+        <p style={{ color: "var(--ink-soft)", fontSize: 14.5, marginTop: 4 }}>
+          {fmtDate(day.date, { weekday: "long", day: "numeric", month: "long" })}
+          {day.theme ? ` · ${day.theme}` : ""}
+        </p>
         {day.dailyTips.length > 0 && (
-          <div style={{ marginTop: 10, padding: "10px 14px", background: "var(--surface2)", borderRadius: 8, fontSize: 13, color: "var(--text-muted)" }}>
-            💡 {day.dailyTips.join(" · ")}
+          <div style={{
+            marginTop: 14, padding: "12px 16px",
+            background: "#fbf6e9", border: "1px solid #efe3bd",
+            borderRadius: 10, fontSize: 13.5, color: "#7a6420", lineHeight: 1.6,
+          }}>
+            <strong style={{ letterSpacing: 0.5 }}>✦ Tips for today:</strong> {day.dailyTips.join(" · ")}
           </div>
         )}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {day.blocks.map((b) => (
-          <BlockCard key={b.blockId} block={b} onSwap={onSwap} />
+
+      <div>
+        {day.blocks.map((b, i) => (
+          <TimelineBlock key={b.blockId} block={b} isLast={i === day.blocks.length - 1} onSwap={onSwap} />
         ))}
       </div>
     </div>
   );
 }
+
+// ── Itinerary screen ──────────────────────────────────────────────────────────
 
 function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onReset: () => void }) {
   const [plan, setPlan] = useState(initialPlan);
@@ -403,51 +490,86 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
     setPlan((prev) => swapOption(prev, blockId, optionId));
   }
 
+  const firstDate = plan.days[0]?.date;
+  const lastDate = plan.days[plan.days.length - 1]?.date;
+
   return (
-    <div style={{ maxWidth: 800, margin: "0 auto", padding: "32px 24px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
-        <div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 6 }}>{plan.title}</h1>
-          <p style={{ color: "var(--text-muted)", fontSize: 15, maxWidth: 580 }}>{plan.description}</p>
-          <div style={{ display: "flex", gap: 16, marginTop: 12, fontSize: 14 }}>
-            <span>📅 {plan.duration}</span>
-            <span>💰 {plan.totalEstimatedCost.currency} {plan.totalEstimatedCost.amount.toLocaleString()}</span>
-            <span>📍 {plan.days.length > 0 ? plan.days[0]?.date : ""} – {plan.days[plan.days.length - 1]?.date ?? ""}</span>
+    <div>
+      {/* Hero */}
+      <div style={{
+        background: "linear-gradient(130deg, var(--navy) 0%, #2c5364 55%, var(--teal) 100%)",
+        padding: "52px 24px 84px",
+        position: "relative",
+      }}>
+        <div style={{ maxWidth: 860, margin: "0 auto", color: "#fff" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+            <div style={{ fontSize: 12, letterSpacing: 2.5, textTransform: "uppercase", fontWeight: 700, opacity: 0.75 }}>
+              ✈ TravelMate itinerary
+            </div>
+            <button
+              onClick={onReset}
+              style={{
+                padding: "8px 18px", background: "rgba(255,255,255,0.14)",
+                border: "1px solid rgba(255,255,255,0.35)", borderRadius: 999,
+                color: "#fff", fontSize: 13, fontWeight: 600, flexShrink: 0,
+                backdropFilter: "blur(4px)",
+              }}
+            >
+              + New trip
+            </button>
+          </div>
+
+          <h1 style={{ fontSize: 42, fontWeight: 900, lineHeight: 1.12, margin: "18px 0 10px", maxWidth: 640 }}>
+            {plan.title}
+          </h1>
+          <p style={{ fontSize: 15.5, opacity: 0.85, maxWidth: 600, lineHeight: 1.65 }}>
+            {plan.description}
+          </p>
+
+          <div style={{ display: "flex", gap: 10, marginTop: 22, flexWrap: "wrap" }}>
+            {[
+              `📅 ${firstDate ? fmtDate(firstDate, { day: "numeric", month: "short" }) : ""} – ${lastDate ? fmtDate(lastDate, { day: "numeric", month: "short", year: "numeric" }) : ""}`,
+              `⏱ ${plan.duration}`,
+              `💰 ${fmtMoney(plan.totalEstimatedCost)} total`,
+            ].map((chip) => (
+              <span key={chip} style={{
+                background: "rgba(255,255,255,0.14)", border: "1px solid rgba(255,255,255,0.28)",
+                padding: "7px 16px", borderRadius: 999, fontSize: 13.5, fontWeight: 600,
+                backdropFilter: "blur(4px)",
+              }}>
+                {chip}
+              </span>
+            ))}
           </div>
         </div>
-        <button
-          onClick={onReset}
-          style={{
-            padding: "8px 16px", background: "var(--surface)", border: "1px solid var(--border)",
-            borderRadius: 8, color: "var(--text-muted)", fontSize: 13, flexShrink: 0,
-          }}
-        >
-          New trip
-        </button>
       </div>
 
-      {/* Day tabs */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 24, overflowX: "auto", paddingBottom: 4 }}>
-        {plan.days.map((day, i) => (
-          <button
-            key={i}
-            onClick={() => setActiveDay(i)}
-            style={{
-              padding: "8px 16px", flexShrink: 0,
-              background: activeDay === i ? "var(--accent)" : "var(--surface)",
-              color: activeDay === i ? "#fff" : "var(--text-muted)",
-              border: `1px solid ${activeDay === i ? "var(--accent)" : "var(--border)"}`,
-              borderRadius: 8, fontWeight: activeDay === i ? 600 : 400, fontSize: 13,
-            }}
-          >
-            Day {day.dayNumber}
-          </button>
-        ))}
+      {/* Day tabs — pulled up over the hero edge */}
+      <div style={{ maxWidth: 860, margin: "-40px auto 0", padding: "0 24px", position: "relative" }}>
+        <div className="card" style={{
+          display: "flex", gap: 6, padding: 8, overflowX: "auto",
+          boxShadow: "var(--shadow-lg)",
+        }}>
+          {plan.days.map((day, i) => (
+            <button
+              key={i}
+              className={`day-tab${activeDay === i ? " active" : ""}`}
+              onClick={() => setActiveDay(i)}
+              style={{ padding: "9px 18px", textAlign: "center" }}
+            >
+              <div style={{ fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap" }}>Day {day.dayNumber}</div>
+              <div style={{ fontSize: 11, opacity: 0.75, whiteSpace: "nowrap" }}>
+                {fmtDate(day.date, { weekday: "short", day: "numeric", month: "short" })}
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Active day */}
-      {plan.days[activeDay] && <DayView day={plan.days[activeDay]!} onSwap={handleSwap} />}
+      {/* Active day timeline */}
+      <div style={{ maxWidth: 860, margin: "0 auto", padding: "34px 24px 80px" }}>
+        {plan.days[activeDay] && <DayView day={plan.days[activeDay]!} onSwap={handleSwap} />}
+      </div>
     </div>
   );
 }
@@ -456,17 +578,17 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
 
 function ErrorScreen({ message, onReset }: { message: string; onReset: () => void }) {
   return (
-    <div style={{ maxWidth: 560, margin: "80px auto", padding: "0 24px", textAlign: "center" }}>
-      <p style={{ fontSize: 48, marginBottom: 16 }}>⚠️</p>
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Something went wrong</h2>
-      <p style={{ color: "var(--text-muted)", fontSize: 14, marginBottom: 24, fontFamily: "monospace" }}>{message}</p>
-      <button
-        onClick={onReset}
-        style={{
-          padding: "10px 24px", background: "var(--accent)", color: "#fff",
-          border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer",
-        }}
-      >
+    <div style={{ maxWidth: 560, margin: "90px auto", padding: "0 24px", textAlign: "center" }}>
+      <p style={{ fontSize: 52, marginBottom: 18 }}>🧳</p>
+      <h2 style={{ fontSize: 26, fontWeight: 700, marginBottom: 10, color: "var(--navy)" }}>We hit some turbulence</h2>
+      <p style={{
+        color: "var(--ink-soft)", fontSize: 13, marginBottom: 28, fontFamily: "monospace",
+        background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
+        padding: "12px 16px", textAlign: "left", overflowWrap: "break-word",
+      }}>
+        {message}
+      </p>
+      <button className="btn-primary" onClick={onReset} style={{ padding: "12px 32px", fontSize: 15 }}>
         Try again
       </button>
     </div>
