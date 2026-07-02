@@ -16,7 +16,7 @@ interface TravelOption {
 }
 interface Block {
   blockId: string; category: string; scheduledTime: string;
-  label?: string; selectedOptionId: string;
+  label?: string; selectedOptionId: string; dependencyLogic: string;
   options: TravelOption[];
 }
 interface DayPlan {
@@ -26,6 +26,67 @@ interface DayPlan {
 interface TripPlan {
   planId: string; title: string; description: string;
   totalEstimatedCost: Money; duration: string; days: DayPlan[];
+}
+
+// ── Swap logic ───────────────────────────────────────────────────────────────
+
+function swapOption(plan: TripPlan, blockId: string, newOptionId: string): TripPlan {
+  const updated = structuredClone(plan);
+
+  // Find the block being swapped
+  let swappedBlock: Block | undefined;
+  for (const day of updated.days) {
+    const block = day.blocks.find((b) => b.blockId === blockId);
+    if (block) { swappedBlock = block; break; }
+  }
+  if (!swappedBlock) return updated;
+
+  const oldOptionId = swappedBlock.selectedOptionId;
+  swappedBlock.selectedOptionId = newOptionId;
+
+  // If a STAYS block was swapped, update dependent TRANSPORT blocks
+  if (swappedBlock.category === "STAYS") {
+    const oldHotel = swappedBlock.options.find((o) => o.id === oldOptionId);
+    const newHotel = swappedBlock.options.find((o) => o.id === newOptionId);
+    if (oldHotel && newHotel && oldHotel.title !== newHotel.title) {
+      updateDependentTransport(updated, oldHotel.title, newHotel);
+    }
+  }
+
+  return updated;
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Replace every occurrence of `from` with `to`, case-insensitively. */
+function replaceAllCI(text: string, from: string, to: string): string {
+  return text.replace(new RegExp(escapeRegExp(from), "gi"), to);
+}
+
+function updateDependentTransport(plan: TripPlan, oldHotelName: string, newHotel: TravelOption) {
+  // The hotel name appears in links in three shapes: plain, "+"-encoded, %-encoded
+  const oldForms: Array<[string, string]> = [
+    [oldHotelName, newHotel.title],
+    [oldHotelName.replace(/ /g, "+"), newHotel.title.replace(/ /g, "+")],
+    [encodeURIComponent(oldHotelName), encodeURIComponent(newHotel.title)],
+  ];
+
+  for (const day of plan.days) {
+    for (const block of day.blocks) {
+      if (block.category !== "TRANSPORT") continue;
+      for (const opt of block.options) {
+        if (opt.link) {
+          for (const [from, to] of oldForms) {
+            opt.link = replaceAllCI(opt.link, from, to);
+          }
+        }
+        opt.title = replaceAllCI(opt.title, oldHotelName, newHotel.title);
+        opt.description = replaceAllCI(opt.description, oldHotelName, newHotel.title);
+      }
+    }
+  }
 }
 
 // ── Category metadata ─────────────────────────────────────────────────────────
@@ -166,7 +227,7 @@ function ThinkingScreen({ thoughts }: { thoughts: string[] }) {
 
 // ── Itinerary view ────────────────────────────────────────────────────────────
 
-function OptionCard({ opt, selected }: { opt: TravelOption; selected: boolean }) {
+function OptionCard({ opt, selected, onSelect }: { opt: TravelOption; selected: boolean; onSelect: () => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div
@@ -177,12 +238,16 @@ function OptionCard({ opt, selected }: { opt: TravelOption; selected: boolean })
         marginTop: 6,
       }}
     >
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen(!open)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(!open); } }}
         style={{
           width: "100%", padding: "10px 12px", background: "transparent",
           border: "none", display: "flex", justifyContent: "space-between",
           alignItems: "center", gap: 8, textAlign: "left", color: "var(--text)",
+          cursor: "pointer", userSelect: "none",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
@@ -212,10 +277,28 @@ function OptionCard({ opt, selected }: { opt: TravelOption; selected: boolean })
             {opt.title} ↗
           </a>
         </div>
-        <span style={{ color: "var(--text-muted)", flexShrink: 0, fontSize: 13 }}>
-          {opt.price.amount > 0 ? `${opt.price.currency} ${opt.price.amount}` : "Free"} {open ? "▲" : "▼"}
-        </span>
-      </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{ color: "var(--text-muted)", fontSize: 13 }}>
+            {opt.price.amount > 0 ? `${opt.price.currency} ${opt.price.amount}` : "Free"}
+          </span>
+          {!selected && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onSelect(); }}
+              style={{
+                padding: "3px 10px", fontSize: 11, fontWeight: 600,
+                background: "var(--accent)", color: "#fff", border: "none",
+                borderRadius: 4, cursor: "pointer", whiteSpace: "nowrap",
+              }}
+            >
+              Select
+            </button>
+          )}
+          {selected && (
+            <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 600 }}>✓ Active</span>
+          )}
+          <span style={{ color: "var(--text-muted)", fontSize: 11 }}>{open ? "▲" : "▼"}</span>
+        </div>
+      </div>
 
       {open && (
         <div style={{ padding: "0 12px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
@@ -243,7 +326,7 @@ function OptionCard({ opt, selected }: { opt: TravelOption; selected: boolean })
   );
 }
 
-function BlockCard({ block }: { block: Block }) {
+function BlockCard({ block, onSwap }: { block: Block; onSwap: (blockId: string, optionId: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const selected = block.options.find((o) => o.id === block.selectedOptionId) ?? block.options[0];
 
@@ -281,7 +364,7 @@ function BlockCard({ block }: { block: Block }) {
       {expanded && (
         <div style={{ padding: "0 16px 16px" }}>
           {block.options.map((opt) => (
-            <OptionCard key={opt.id} opt={opt} selected={opt.id === block.selectedOptionId} />
+            <OptionCard key={opt.id} opt={opt} selected={opt.id === block.selectedOptionId} onSelect={() => onSwap(block.blockId, opt.id)} />
           ))}
         </div>
       )}
@@ -289,7 +372,7 @@ function BlockCard({ block }: { block: Block }) {
   );
 }
 
-function DayView({ day }: { day: DayPlan }) {
+function DayView({ day, onSwap }: { day: DayPlan; onSwap: (blockId: string, optionId: string) => void }) {
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
@@ -305,15 +388,20 @@ function DayView({ day }: { day: DayPlan }) {
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {day.blocks.map((b) => (
-          <BlockCard key={b.blockId} block={b} />
+          <BlockCard key={b.blockId} block={b} onSwap={onSwap} />
         ))}
       </div>
     </div>
   );
 }
 
-function ItineraryScreen({ plan, onReset }: { plan: TripPlan; onReset: () => void }) {
+function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onReset: () => void }) {
+  const [plan, setPlan] = useState(initialPlan);
   const [activeDay, setActiveDay] = useState(0);
+
+  function handleSwap(blockId: string, optionId: string) {
+    setPlan((prev) => swapOption(prev, blockId, optionId));
+  }
 
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "32px 24px" }}>
@@ -359,7 +447,7 @@ function ItineraryScreen({ plan, onReset }: { plan: TripPlan; onReset: () => voi
       </div>
 
       {/* Active day */}
-      {plan.days[activeDay] && <DayView day={plan.days[activeDay]!} />}
+      {plan.days[activeDay] && <DayView day={plan.days[activeDay]!} onSwap={handleSwap} />}
     </div>
   );
 }
