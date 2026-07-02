@@ -15,14 +15,19 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:contracts": "turbo run test --filter=...[HEAD] -- --testNamePattern=contract",
+    "test:system": "tsx tooling/system-test.ts",
     "e2e": "turbo run e2e",
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write .",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@travelmate/contracts": "workspace:^",
+    "@travelmate/llm": "workspace:^",
+    "@travelmate/orchestrator": "workspace:^",
     "husky": "^9.1.7",
     "prettier": "^3.3.0",
+    "tsx": "^4.19.0",
     "turbo": "^2.1.0",
     "typescript": "^5.6.0"
   }

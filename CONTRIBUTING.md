@@ -41,6 +41,25 @@ pnpm test:contracts
 
 All green, the PR template filled, CODEOWNERS review obtained. CI must pass to merge.
 
+## System test — "did we break the product?"
+
+Unit tests prove the code; the system test proves the *product*. It runs the real
+pipeline (intent → synthesis, live LLM) for traveler personas and grades every plan
+with the deterministic zero-thinking quality validator
+(`packages/orchestrator/src/quality.ts` — the same one used at runtime).
+
+```bash
+pnpm test:system                  # 1 persona — fast smoke test after any pipeline change
+pnpm test:system --all            # full 4-persona matrix (family/solo/couple/business)
+pnpm test:system --persona solo   # a single persona by id
+```
+
+Reads `GEMINI_API_KEY` from `.env.local` automatically, prints a scored report, writes
+JSON to `tooling/reports/`, and exits non-zero on any error-severity issue. Run it after
+**any** change to `packages/orchestrator`, `packages/llm`, or the prompts — it is the
+fastest way to know the itinerary quality still holds. (It spends real LLM quota, so it
+is not part of `pnpm test`.)
+
 ## Automated pre-push check
 
 A Husky `pre-push` hook (`.husky/pre-push`) runs `pnpm typecheck && pnpm test` on
