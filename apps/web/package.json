@@ -12,9 +12,11 @@
     "lint": "eslint app src",
     "test": "vitest run --passWithNoTests",
     "e2e": "playwright test",
-    "clean": "rm -rf .next dist .turbo coverage"
+    "clean": "rm -rf .next dist .turbo coverage",
+    "test:pdf": "tsx scripts/pdf-smoke.ts"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.5.1",
     "@travelmate/contracts": "workspace:*",
     "@travelmate/database": "workspace:*",
     "@travelmate/trip-mode": "workspace:*",
