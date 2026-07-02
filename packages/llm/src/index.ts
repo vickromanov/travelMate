@@ -14,6 +14,7 @@ import { geminiProvider } from "./providers/gemini.js";
 export * from "./router.js";
 export * from "./tokens.js";
 export type { SemanticCache } from "./cache.js";
+export { geminiSearchGrounded } from "./providers/gemini.js";
 
 export interface LLMProvider {
   id: "mock" | "anthropic" | "gemini";

@@ -24,6 +24,12 @@ export const CrucialInfoSchema = z.object({
   travelerDescription: z.string().min(1),
   tripType: z.string().min(1),
   budgetTier: BudgetTierSchema,
+  /**
+   * Explicit numeric budget stated by the traveler, normalised to PER DAY per
+   * person (e.g. "€50/day" → 50; "total €800 for a week solo" → ~114). A hard
+   * constraint on the selected (ANCHOR) options, enforced by the quality validator.
+   */
+  budgetDailyCap: MoneySchema.nullish().transform((v) => v ?? undefined),
   origin: optStr(),
   startDate: optDate(),
   endDate: optDate(),
@@ -37,7 +43,7 @@ export type CrucialInfo = z.infer<typeof CrucialInfoSchema>;
 
 export const InferenceEntrySchema = z.object({
   field: z.string(),
-  assumed: z.string(),
+  assumed: z.preprocess((v) => String(v), z.string()),
   reason: z.string(),
 });
 export type InferenceEntry = z.infer<typeof InferenceEntrySchema>;
@@ -59,8 +65,10 @@ export const TravelOptionSchema = z.object({
   id: z.string().min(1),
   tier: z.enum(["ANCHOR", "SMART-VALUE", "PREMIUM", "INDEPENDENT"]),
   title: z.string(),
-  description: z.string(),
-  reasoning: z.string(),
+  // Narrative fields: an LLM occasionally omits one on a single option — that
+  // must degrade to an empty string (quality validator warns), never kill the plan.
+  description: z.string().nullish().transform((v) => v ?? ""),
+  reasoning: z.string().nullish().transform((v) => v ?? ""),
   price: MoneySchema,
   location: GeoLocationSchema,
   scheduledTime: optStr(),
@@ -77,7 +85,11 @@ export type TravelOption = z.infer<typeof TravelOptionSchema>;
 
 export const ItineraryBlockSchema = z.object({
   blockId: z.string().min(1), // "d1_b1"
-  category: z.enum(["STAYS", "TRANSPORT", "DINING", "ACTIVITIES", "LOGISTICS"]),
+  category: z.preprocess(
+    // LLMs sometimes output the singular "ACTIVITY" — normalise before enum check
+    (v) => (v === "ACTIVITY" ? "ACTIVITIES" : v),
+    z.enum(["STAYS", "TRANSPORT", "DINING", "ACTIVITIES", "LOGISTICS"]),
+  ),
   timeSlot: z
     .enum(["MORNING", "AFTERNOON", "EVENING", "OVERNIGHT", "ALL_DAY"])
     .nullish()
@@ -100,8 +112,8 @@ export const DayPlanSchema = z.object({
   dayNumber: z.number().int().positive(),
   date: z.string().date(),
   title: z.string(),
-  theme: z.string(),
-  dailyTips: z.array(z.string()),
+  theme: z.string().nullish().transform((v) => v ?? ""),
+  dailyTips: z.array(z.string()).nullish().transform((v) => v ?? []),
   startLocation: optStr(),
   blocks: z.array(ItineraryBlockSchema),
 });

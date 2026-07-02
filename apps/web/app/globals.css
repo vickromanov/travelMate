@@ -1,37 +1,80 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/*
+ * TravelMate design tokens — "paper travel journal" light theme.
+ * 60-30-10: warm paper neutrals (60) · deep navy ink (30) · sunset coral accent (10).
+ * Category colors give the timeline instant scannability.
+ */
 :root {
-  --bg: #0f0f13;
-  --surface: #1a1a24;
-  --surface2: #22222e;
-  --border: #2e2e3e;
-  --accent: #6c63ff;
-  --accent2: #a78bfa;
-  --text: #e8e8f0;
-  --text-muted: #888899;
-  --green: #4ade80;
-  --yellow: #fbbf24;
-  --red: #f87171;
-  --radius: 12px;
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* neutrals */
+  --bg: #faf8f4;
+  --bg-soft: #f2eee6;
+  --surface: #ffffff;
+  --border: #eae4d8;
+  --border-strong: #d9d1c0;
+
+  /* ink */
+  --ink: #1c2433;
+  --ink-soft: #465063;
+  --muted: #8a92a3;
+
+  /* accents */
+  --accent: #e2603a;        /* sunset coral — CTAs, selection */
+  --accent-soft: #fdeee8;
+  --accent-hover: #cc4f2b;
+  --teal: #0e7c7b;          /* sea teal — links */
+  --teal-soft: #e3f2f1;
+  --navy: #21375f;          /* hero, headers */
+
+  /* category coding */
+  --cat-stays: #6d5bd0;      --cat-stays-soft: #efecfb;
+  --cat-dining: #d97706;     --cat-dining-soft: #fdf3e3;
+  --cat-transport: #0284c7;  --cat-transport-soft: #e5f3fb;
+  --cat-activities: #0e9f6e; --cat-activities-soft: #e5f7f0;
+  --cat-logistics: #64748b;  --cat-logistics-soft: #eef1f5;
+
+  /* tiers */
+  --tier-anchor: #1c2433;
+  --tier-value: #0e9f6e;
+  --tier-premium: #b48a1e;
+  --tier-independent: #0e7c7b;
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --shadow-sm: 0 1px 2px rgba(28, 36, 51, 0.06);
+  --shadow-md: 0 4px 18px rgba(28, 36, 51, 0.08);
+  --shadow-lg: 0 14px 40px rgba(28, 36, 51, 0.14);
+
+  --font-display-stack: var(--font-display), Georgia, "Times New Roman", serif;
+  --font-body-stack: var(--font-body), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* legacy aliases still referenced by components */
+  --surface2: var(--bg-soft);
+  --text: var(--ink);
+  --text-muted: var(--muted);
+  --accent2: var(--teal);
 }
 
 body {
   background: var(--bg);
-  color: var(--text);
-  font-family: var(--font);
+  color: var(--ink);
+  font-family: var(--font-body-stack);
   font-size: 15px;
   line-height: 1.6;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
-a { color: var(--accent2); text-decoration: none; }
+h1, h2, h3, .display { font-family: var(--font-display-stack); }
+
+a { color: var(--teal); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 button {
   cursor: pointer;
   font-family: inherit;
   font-size: inherit;
+  color: inherit;
 }
 
 input, textarea {
@@ -39,3 +82,93 @@ input, textarea {
   font-size: inherit;
   color: inherit;
 }
+
+/* ── Shared animations ─────────────────────────────────────────────────── */
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(0.8); }
+}
+
+/* ── Reusable classes (hover states need CSS, not inline styles) ───────── */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+.card:hover { box-shadow: var(--shadow-md); }
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-weight: 600;
+  transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  box-shadow: 0 4px 14px rgba(226, 96, 58, 0.35);
+}
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
+.btn-primary:disabled { background: var(--border-strong); box-shadow: none; cursor: default; }
+
+.btn-ghost {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.btn-ghost:hover { border-color: var(--border-strong); color: var(--ink); }
+
+.example-chip {
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.example-chip:hover {
+  border-color: var(--teal);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.day-tab {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-soft);
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.day-tab:hover { border-color: var(--border-strong); }
+.day-tab.active {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+
+.select-btn {
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface);
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: all 0.13s ease;
+}
+.select-btn:hover { background: var(--accent); color: #fff; }
+
+.option-row { transition: background 0.13s ease; }
+.option-row:hover { background: var(--bg-soft); }
