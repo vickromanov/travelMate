@@ -135,7 +135,10 @@ async function runPersona(persona: Persona): Promise<PersonaResult> {
     const data = await resolveData(fetchPlan, undefined as never); // MVP: no fetchers yet
     const plan: TripPlan = await synthesizePlan(brief, data, llm, cb);
 
-    const report = validatePlanQuality(plan);
+    const report = validatePlanQuality(plan, {
+      dailyBudgetCap: brief.facts.budgetDailyCap,
+      partyAdults: brief.facts.partyAdults,
+    });
     const blocks = plan.days.reduce((s, d) => s + d.blocks.length, 0);
     console.log(`\n${formatQualityReport(report)}\n`);
 

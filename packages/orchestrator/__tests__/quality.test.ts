@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 import type { TripPlan, DayPlan, ItineraryBlock, TravelOption } from "@travelmate/contracts";
-import { validatePlanQuality, formatQualityReport } from "../src/quality.js";
+import { validatePlanQuality, formatQualityReport, enforceBudgetBySwaps } from "../src/quality.js";
 
 /* ── Fixture builders ─────────────────────────────────────────────────────── */
 
@@ -199,6 +199,87 @@ describe("validatePlanQuality — option-level rules", () => {
     const transport = plan.days[0]!.blocks.find((b) => b.category === "TRANSPORT")!;
     transport.options[0]!.link = "https://example.com/some-page";
     expect(validatePlanQuality(plan).issues.some((i) => i.rule === "transport-directions-link")).toBe(true);
+  });
+});
+
+describe("validatePlanQuality — budget cap", () => {
+  // goodDay has 8 blocks × €20 selected ANCHOR = €160/day
+  it("passes when selected options fit the budget", () => {
+    const report = validatePlanQuality(goodPlan(1), {
+      dailyBudgetCap: { amount: 200, currency: "EUR" },
+    });
+    expect(report.issues.some((i) => i.rule === "budget-cap")).toBe(false);
+  });
+
+  it("errors when selected options exceed the cap by >20%", () => {
+    const report = validatePlanQuality(goodPlan(1), {
+      dailyBudgetCap: { amount: 50, currency: "EUR" },
+    });
+    expect(report.issues.some((i) => i.rule === "budget-cap" && i.severity === "error")).toBe(true);
+    expect(report.ok).toBe(false);
+  });
+
+  it("warns when slightly over the cap", () => {
+    const report = validatePlanQuality(goodPlan(1), {
+      dailyBudgetCap: { amount: 150, currency: "EUR" },
+    });
+    const issue = report.issues.find((i) => i.rule === "budget-cap");
+    expect(issue?.severity).toBe("warning");
+  });
+
+  it("scales the cap by party size", () => {
+    // €160/day total, cap €50 × 4 adults = €200 → within budget
+    const report = validatePlanQuality(goodPlan(1), {
+      dailyBudgetCap: { amount: 50, currency: "EUR" },
+      partyAdults: 4,
+    });
+    expect(report.issues.some((i) => i.rule === "budget-cap")).toBe(false);
+  });
+
+  it("ignores budget when no cap is provided", () => {
+    expect(validatePlanQuality(goodPlan(1)).issues.some((i) => i.rule === "budget-cap")).toBe(false);
+  });
+});
+
+describe("enforceBudgetBySwaps", () => {
+  function planWithCheaperOptions(): TripPlan {
+    const plan = goodPlan(1);
+    // Give every block a cheap alternative: SMART-VALUE at €5 (ANCHOR selected at €20)
+    for (const b of plan.days[0]!.blocks) {
+      const value = b.options.find((o) => o.tier === "SMART-VALUE")!;
+      value.price = { amount: 5, currency: "EUR" };
+    }
+    return plan; // selected total: 8 × €20 = €160; fully swapped: 8 × €5 = €40
+  }
+
+  it("swaps selected options until the day fits the cap", () => {
+    const plan = planWithCheaperOptions();
+    const swaps = enforceBudgetBySwaps(plan, { dailyBudgetCap: { amount: 50, currency: "EUR" } });
+    expect(swaps).toBeGreaterThan(0);
+    const report = validatePlanQuality(plan, { dailyBudgetCap: { amount: 50, currency: "EUR" } });
+    expect(report.issues.some((i) => i.rule === "budget-cap")).toBe(false);
+  });
+
+  it("swaps as few blocks as possible (largest savings first)", () => {
+    const plan = planWithCheaperOptions();
+    // cap 150: only €10 over — one €15 saving swap should be enough
+    const swaps = enforceBudgetBySwaps(plan, { dailyBudgetCap: { amount: 150, currency: "EUR" } });
+    expect(swaps).toBe(1);
+  });
+
+  it("does nothing when already within budget", () => {
+    const plan = planWithCheaperOptions();
+    expect(enforceBudgetBySwaps(plan, { dailyBudgetCap: { amount: 200, currency: "EUR" } })).toBe(0);
+  });
+
+  it("gives up gracefully when no cheaper options exist", () => {
+    const plan = goodPlan(1); // all options €20 — nothing cheaper to swap to
+    const swaps = enforceBudgetBySwaps(plan, { dailyBudgetCap: { amount: 50, currency: "EUR" } });
+    expect(swaps).toBe(0);
+  });
+
+  it("no-ops without a cap", () => {
+    expect(enforceBudgetBySwaps(planWithCheaperOptions(), {})).toBe(0);
   });
 });
 

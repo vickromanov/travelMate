@@ -8,7 +8,14 @@
  * error   = plan breaks a zero-thinking promise → worth an LLM repair round
  * warning = quality degradation → logged, surfaced, but the plan still ships
  */
-import type { TripPlan, DayPlan, ItineraryBlock } from "@travelmate/contracts";
+import type { TripPlan, DayPlan, ItineraryBlock, Money } from "@travelmate/contracts";
+
+export interface QualityOptions {
+  /** Traveler-stated per-day, per-person budget — selected options must fit it. */
+  dailyBudgetCap?: Money;
+  /** Used to scale the per-person cap to the whole party. Defaults to 1. */
+  partyAdults?: number;
+}
 
 export interface QualityIssue {
   severity: "error" | "warning";
@@ -50,7 +57,7 @@ function anchorTitle(block: ItineraryBlock): string | undefined {
   return block.options.find((o) => o.tier === "ANCHOR")?.title;
 }
 
-export function validatePlanQuality(plan: TripPlan): QualityReport {
+export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): QualityReport {
   const issues: QualityIssue[] = [];
   const err = (rule: string, where: string, message: string, dayNumber?: number) =>
     issues.push({ severity: "error", rule, where, message, dayNumber });
@@ -93,6 +100,25 @@ export function validatePlanQuality(plan: TripPlan): QualityReport {
     if (count("DINING") < 3) err("dining-coverage", where, `only ${count("DINING")} DINING block(s) — need breakfast, lunch, dinner`, day.dayNumber);
     if (count("ACTIVITIES") < 1) err("activities-coverage", where, "no ACTIVITIES block", day.dayNumber);
     if (count("TRANSPORT") < 2) warn("transport-coverage", where, `only ${count("TRANSPORT")} TRANSPORT block(s) — traveler may be stranded between venues`, day.dayNumber);
+
+    // Budget cap (traveler-stated, e.g. "€50/day") — checked against the
+    // SELECTED options, i.e. what the traveler actually pays by default
+    if (opts.dailyBudgetCap) {
+      const capTotal = opts.dailyBudgetCap.amount * Math.max(1, opts.partyAdults ?? 1);
+      const dayTotal = day.blocks.reduce((sum, b) => {
+        const sel = b.options.find((o) => o.id === b.selectedOptionId) ?? b.options[0];
+        return sum + (sel?.price.amount ?? 0);
+      }, 0);
+      if (dayTotal > capTotal * 1.2) {
+        err("budget-cap", where,
+          `selected options total ${opts.dailyBudgetCap.currency} ${Math.round(dayTotal)} — exceeds the traveler's ${opts.dailyBudgetCap.currency} ${capTotal}/day budget by more than 20%`,
+          day.dayNumber);
+      } else if (dayTotal > capTotal) {
+        warn("budget-cap", where,
+          `selected options total ${opts.dailyBudgetCap.currency} ${Math.round(dayTotal)} — slightly over the ${opts.dailyBudgetCap.currency} ${capTotal}/day budget`,
+          day.dayNumber);
+      }
+    }
 
     // Meal-slot coverage
     const diningTimes = day.blocks
@@ -143,6 +169,9 @@ export function validatePlanQuality(plan: TripPlan): QualityReport {
         if (PLACEHOLDER_RE.test(o.title)) {
           err("no-placeholders", bWhere, `option "${o.title}" looks like a placeholder, not a real venue`, day.dayNumber);
         }
+        if (!o.description || !o.reasoning) {
+          warn("option-completeness", bWhere, `option "${o.title}" is missing its ${!o.description ? "description" : "reasoning"}`, day.dayNumber);
+        }
         const { lat, lng } = o.location;
         if (lat === 0 && lng === 0) {
           warn("plausible-coords", bWhere, `option "${o.title}" has (0,0) coordinates`, day.dayNumber);
@@ -185,6 +214,49 @@ function summarize(issues: QualityIssue[]): QualityReport {
     score: Math.max(0, 100 - errors * 10 - warnings * 2),
     ok: errors === 0,
   };
+}
+
+/**
+ * Deterministic budget enforcement — NO LLM (projectStructure.md §3.3 spirit:
+ * re-pick options from what is already generated). For each day over the cap,
+ * greedily swaps the selected option to a cheaper alternative on the block with
+ * the largest saving, until the day fits or no cheaper alternatives remain.
+ * Mutates the plan in place; returns the number of swaps performed.
+ */
+export function enforceBudgetBySwaps(plan: TripPlan, opts: QualityOptions): number {
+  const cap = opts.dailyBudgetCap;
+  if (!cap) return 0;
+  const capTotal = cap.amount * Math.max(1, opts.partyAdults ?? 1);
+  let swaps = 0;
+
+  for (const day of plan.days) {
+    const selectedPrice = (b: ItineraryBlock) =>
+      (b.options.find((o) => o.id === b.selectedOptionId) ?? b.options[0])?.price.amount ?? 0;
+    let total = day.blocks.reduce((s, b) => s + selectedPrice(b), 0);
+
+    while (total > capTotal) {
+      // Find the block where switching to its cheapest option saves the most
+      let bestBlock: ItineraryBlock | undefined;
+      let bestOptionId: string | undefined;
+      let bestSaving = 0;
+      for (const b of day.blocks) {
+        const current = selectedPrice(b);
+        for (const o of b.options) {
+          const saving = current - o.price.amount;
+          if (saving > bestSaving) {
+            bestSaving = saving;
+            bestBlock = b;
+            bestOptionId = o.id;
+          }
+        }
+      }
+      if (!bestBlock || !bestOptionId) break; // nothing cheaper anywhere — give up
+      bestBlock.selectedOptionId = bestOptionId;
+      total -= bestSaving;
+      swaps++;
+    }
+  }
+  return swaps;
 }
 
 /** Compact human-readable digest for onThought / test reports. */

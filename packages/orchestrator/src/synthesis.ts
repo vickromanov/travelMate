@@ -14,7 +14,7 @@ import type {
 } from "@travelmate/contracts";
 import { TripPlanSchema, DayPlanSchema } from "@travelmate/contracts";
 import type { LLMClient } from "@travelmate/llm";
-import { validatePlanQuality, formatQualityReport } from "./quality.js";
+import { validatePlanQuality, formatQualityReport, enforceBudgetBySwaps } from "./quality.js";
 
 const SYSTEM = `You are TravelMate's synthesis engine. Generate a complete, zero-thinking travel itinerary.
 Output ONLY valid JSON — no markdown, no code fences, no comments, no explanation.
@@ -212,16 +212,31 @@ function buildBatchPrompt(
     ? `\nIMPORTANT: The traveler is staying at "${hotelHint}" for all nights. Use this exact hotel name in every STAYS block and every TRANSPORT block that references the hotel.`
     : "";
 
+  const cap = f.budgetDailyCap;
+  const budgetLine = cap
+    ? `\n=== HARD BUDGET CONSTRAINT ===
+The traveler stated an explicit budget of ${cap.currency} ${cap.amount} PER DAY.
+For EVERY day, the sum of the ANCHOR (default-selected) options — accommodation +
+all meals + activities + transport — MUST NOT exceed ${cap.currency} ${cap.amount}.
+Pick hostels/guesthouses, street food/markets, free or cheap activities, and public
+transport as the ANCHOR options. SMART-VALUE options should be cheaper still.
+Only the PREMIUM tier may exceed the cap. totalEstimatedCost must reflect the
+ANCHOR selections (≈ ${cap.currency} ${cap.amount * (brief.facts.partyAdults ?? 1)} × ${totalDays} days max).`
+    : "";
+
   return `TRAVELER PROFILE:
 ${brief.travelerProfile}
+
+ORIGINAL TRAVELER REQUEST (verbatim — honour every stated constraint):
+${f.freeformText ?? f.travelerDescription}
 
 TRIP FACTS:
 - Destination: ${f.destination}
 - Trip type: ${f.tripType}
 - Party: ${party}
-- Budget: ${f.budgetTier}
+- Budget: ${f.budgetTier}${cap ? ` (hard cap ${cap.currency} ${cap.amount}/day)` : ""}
 - Total trip: ${totalDays} days starting ${tripStartDate}
-${hotelLine}
+${hotelLine}${budgetLine}
 
 ASSUMPTIONS ALREADY MADE (echo these in inferenceChain):
 ${assumptionsList || "  (none)"}
@@ -354,12 +369,28 @@ export async function synthesizePlan(
   sortBlocks(plan);
 
   // Quality gate (H3): deterministic checks + ONE scoped repair round on errors
-  let report = validatePlanQuality(plan);
+  const qualityOpts = {
+    dailyBudgetCap: brief.facts.budgetDailyCap,
+    partyAdults: brief.facts.partyAdults,
+  };
+  let report = validatePlanQuality(plan, qualityOpts);
+
+  // Budget overruns are fixed deterministically first: swap selected options to
+  // the cheaper alternatives already in the plan — no LLM, instant, loss-free.
+  if (!report.ok && qualityOpts.dailyBudgetCap) {
+    const swaps = enforceBudgetBySwaps(plan, qualityOpts);
+    if (swaps > 0) {
+      cb.onThought(`Swapped ${swaps} option(s) to cheaper alternatives to honour the ${qualityOpts.dailyBudgetCap.currency} ${qualityOpts.dailyBudgetCap.amount}/day budget.`);
+      report = validatePlanQuality(plan, qualityOpts);
+    }
+  }
+
+  // Whatever remains goes through ONE scoped LLM repair round
   if (!report.ok) {
     cb.onThought(`Quality check found ${report.errors} issue(s) — running a repair pass…`);
-    plan = await repairPlan(plan, report.issues, llm, cb);
+    plan = await repairPlan(plan, report.issues, llm, cb, brief);
     sortBlocks(plan);
-    report = validatePlanQuality(plan);
+    report = validatePlanQuality(plan, qualityOpts);
   }
   cb.onThought(formatQualityReport(report, 5));
 
@@ -389,6 +420,7 @@ async function repairPlan(
   issues: import("./quality.js").QualityIssue[],
   llm: LLMClient,
   cb: StreamCallbacks,
+  brief: TripBrief,
 ): Promise<TripPlan> {
   const brokenDayNumbers = [
     ...new Set(
@@ -409,6 +441,11 @@ async function repairPlan(
       (iss) => iss.severity === "error" && iss.dayNumber !== undefined && chunk.includes(iss.dayNumber),
     );
 
+    const cap = brief.facts.budgetDailyCap;
+    const capLine = cap
+      ? `\nHARD CONSTRAINT: the traveler's budget is ${cap.currency} ${cap.amount} per day — the ANCHOR (selected) options of each day must sum within it.`
+      : "";
+
     const prompt = `The following itinerary day(s) FAILED quality validation.
 
 CURRENT JSON:
@@ -416,7 +453,7 @@ ${JSON.stringify({ days: chunkDays })}
 
 VALIDATION ERRORS TO FIX:
 ${chunkIssues.map((iss) => `- [${iss.rule}] ${iss.where}: ${iss.message}`).join("\n")}
-
+${capLine}
 Fix ONLY these problems. Keep everything that is already correct (venues, prices, options) unchanged.
 Output a JSON object: {"days": [ ...the corrected day objects, same schema... ]}`;
 
@@ -445,7 +482,10 @@ Output a JSON object: {"days": [ ...the corrected day objects, same schema... ]}
     }
   }
 
-  if (repaired.size === 0) return plan;
+  if (repaired.size === 0) {
+    cb.onThought("Repair output did not pass schema validation — keeping the original days.");
+    return plan;
+  }
   cb.onThought(`Repaired ${repaired.size} day(s).`);
   return {
     ...plan,

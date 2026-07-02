@@ -19,6 +19,7 @@ OUTPUT SCHEMA (output exactly this JSON structure):
     "travelerDescription": "string",
     "tripType": "string",
     "budgetTier": "ECONOMY" | "SMART" | "LUXURY",
+    "budgetDailyCap": null or { "amount": number, "currency": "EUR" },
     "origin": null or "string",
     "startDate": null or "YYYY-MM-DD",
     "endDate": null or "YYYY-MM-DD",
@@ -45,6 +46,11 @@ INFERENCE RULES:
     • ALWAYS set BOTH startDate and endDate (compute endDate = startDate + duration).
 - Party size: "couple"/"us"/"we" → 2 adults 0 children; "solo"/"I am" → 1 adult; "family" → 2 adults 2 children; otherwise 2 adults
 - Budget: "cheap/budget/hostel/backpacker" → ECONOMY; "comfortable/mid-range" → SMART; "luxury/first-class/Michelin" → LUXURY
+- budgetDailyCap: if the traveler states an EXPLICIT numeric budget, capture it normalised to PER DAY:
+    • "€50/day" or "$100 per day" → {"amount": 50, "currency": "EUR"} / {"amount": 100, "currency": "USD"}
+    • a TOTAL budget ("€800 for the week") → divide by trip days → per-day amount
+    • log the normalisation in inferenceChain
+    • no explicit number mentioned → null (do NOT invent one from the tier)
 - Origin: leave null if not mentioned
 - neededCategories: always include hotels, dining, activities, weather, places. Add "flights" only if origin is provided.
 - Log EVERY assumption in inferenceChain
