@@ -37,7 +37,7 @@ export type CrucialInfo = z.infer<typeof CrucialInfoSchema>;
 
 export const InferenceEntrySchema = z.object({
   field: z.string(),
-  assumed: z.string(),
+  assumed: z.preprocess((v) => String(v), z.string()),
   reason: z.string(),
 });
 export type InferenceEntry = z.infer<typeof InferenceEntrySchema>;
@@ -77,7 +77,11 @@ export type TravelOption = z.infer<typeof TravelOptionSchema>;
 
 export const ItineraryBlockSchema = z.object({
   blockId: z.string().min(1), // "d1_b1"
-  category: z.enum(["STAYS", "TRANSPORT", "DINING", "ACTIVITIES", "LOGISTICS"]),
+  category: z.preprocess(
+    // LLMs sometimes output the singular "ACTIVITY" — normalise before enum check
+    (v) => (v === "ACTIVITY" ? "ACTIVITIES" : v),
+    z.enum(["STAYS", "TRANSPORT", "DINING", "ACTIVITIES", "LOGISTICS"]),
+  ),
   timeSlot: z
     .enum(["MORNING", "AFTERNOON", "EVENING", "OVERNIGHT", "ALL_DAY"])
     .nullish()

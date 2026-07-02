@@ -11,6 +11,8 @@ export { extractIntent } from "./intent.js";
 export { buildFetchPlan, resolveData } from "./planner.js";
 export { synthesizePlan } from "./synthesis.js";
 export { reflow } from "./reflow.js";
+export { validatePlanQuality, formatQualityReport } from "./quality.js";
+export type { QualityIssue, QualityReport } from "./quality.js";
 
 /** Public entrypoint A: build a brand-new plan from user input. */
 export async function orchestrate(
