@@ -22,12 +22,31 @@ The JSON must be parseable by JSON.parse().`;
 
 const SCHEMA_BLOCK = `
 === CRITICAL BLOCK COUNT REQUIREMENT ===
-Every single day MUST contain AT LEAST 8 blocks:
+Every FULL day MUST contain AT LEAST 8 blocks:
   - 3 × DINING  (breakfast 08:00, lunch 12:30, dinner 19:30)
   - 2 × ACTIVITIES (morning + afternoon)
   - 1 × STAYS (accommodation, scheduledTime "15:00" check-in or "21:30")
   - 2 × TRANSPORT (one transfer per major location change)
 Do NOT stop after 1 block. Generate ALL blocks for the day before moving to the next day.
+EXCEPTION: the ARRIVAL and DEPARTURE days are partial days — see the
+ARRIVAL & DEPARTURE DAYS section; they contain only what physically fits.
+
+=== ARRIVAL & DEPARTURE DAYS — RESPECT PHYSICAL REALITY ===
+Day 1 is the ARRIVAL day. The traveler is NOT at the destination in the morning
+(assume mid-afternoon arrival unless an arrival time is stated).
+  - NO breakfast, NO lunch, NO morning activities at the destination on Day 1.
+  - Day 1 starts with arrival + hotel check-in (STAYS block, ~15:00), then an
+    afternoon/evening program: one light activity, then dinner.
+The FINAL day is the DEPARTURE day.
+  - Breakfast + one morning activity at most, hotel checkout by ~11:00
+    (STAYS block labelled "Checkout"), optionally lunch — then departure.
+  - NO dinner or evening program on the final day unless a late departure is stated.
+If the traveler states arrival/departure times, schedule around those instead.
+
+=== NAMED ACCOMMODATION ===
+If the traveler has already booked or named their hotel, that EXACT property is the
+ANCHOR option of EVERY STAYS block — never invent a different default. Other tiers
+may offer alternatives, clearly framed as "if you weren't already booked".
 
 === REQUIRED JSON OUTPUT SCHEMA ===
 
@@ -183,13 +202,15 @@ Add 20-30 min buffer between morning→afternoon, afternoon→evening.
 TRANSPORT options: include mode of transport, duration, and from/to place names.
 `;
 
-function computeNumDays(brief: TripBrief): { numDays: number; start: string } {
+export function computeNumDays(brief: TripBrief): { numDays: number; start: string } {
   const f = brief.facts;
   // No date at all → 30 days from today (never a hardcoded date)
   const start = f.startDate ?? addDays(new Date().toISOString().slice(0, 10), 30);
   const end = f.endDate;
+  // endDate is the LAST day of the trip, so the count is INCLUSIVE:
+  // "03.07 to 05.07" = arrival day + full day + departure day = 3 days, not 2.
   const numDays = end
-    ? Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000))
+    ? Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1)
     : (() => {
         for (const entry of brief.inferenceChain) {
           const numMatch = entry.assumed.match(/(\d+)\s*(?:days?|nights?)/i);
@@ -256,7 +277,10 @@ Generate days ${batchStart} through ${batchEnd} of the ${totalDays}-day itinerar
 Day ${batchStart} starts on date ${addDays(tripStartDate, batchStart - 1)}.
 Output a JSON object with: "days" (array of ${batchEnd - batchStart + 1} day objects), "inferenceChain" (array).
 ${batchStart === 1 ? 'Also include: "title" (string), "description" (string), "totalEstimatedCost" ({amount, currency}), "duration" (string).' : ""}
-Each day must have AT LEAST 8 blocks (1 STAYS + 3 DINING + 2 ACTIVITIES + 2 TRANSPORT).
+${batchStart === 1 ? `REMINDER: Day 1 is the ARRIVAL day — start with check-in in the afternoon, NO breakfast/lunch/morning program at the destination.` : ""}
+${batchEnd === totalDays ? `REMINDER: Day ${totalDays} is the DEPARTURE day — breakfast, checkout ~11:00, at most one morning activity, NO evening program.` : ""}
+Each FULL day must have AT LEAST 8 blocks (1 STAYS + 3 DINING + 2 ACTIVITIES + 2 TRANSPORT);
+arrival/departure days contain only what physically fits their partial schedule.
 Every block must have EXACTLY 4 options: ANCHOR, SMART-VALUE, PREMIUM, INDEPENDENT.`;
 }
 

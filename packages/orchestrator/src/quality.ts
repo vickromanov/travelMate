@@ -94,12 +94,26 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
       err("dates-sequential", where, `expected date ${expectedDate}, got ${day.date}`, day.dayNumber);
     }
 
-    // Category coverage — the zero-thinking floor for a full travel day
+    // Category coverage — the zero-thinking floor. Arrival (first) and
+    // departure (last) days are PARTIAL days: the traveler is only at the
+    // destination for part of them, so a single meal is legitimate.
+    const isArrival = i === 0;
+    const isDeparture = i === plan.days.length - 1;
+    const partialDay = isArrival || isDeparture;
+
     const count = (cat: string) => day.blocks.filter((b) => b.category === cat).length;
     if (count("STAYS") < 1) err("stays-coverage", where, "no STAYS block — traveler has no accommodation anchor", day.dayNumber);
-    if (count("DINING") < 3) err("dining-coverage", where, `only ${count("DINING")} DINING block(s) — need breakfast, lunch, dinner`, day.dayNumber);
-    if (count("ACTIVITIES") < 1) err("activities-coverage", where, "no ACTIVITIES block", day.dayNumber);
-    if (count("TRANSPORT") < 2) warn("transport-coverage", where, `only ${count("TRANSPORT")} TRANSPORT block(s) — traveler may be stranded between venues`, day.dayNumber);
+    const minDining = partialDay ? 1 : 3;
+    if (count("DINING") < minDining) {
+      err("dining-coverage", where,
+        partialDay
+          ? "no DINING block — even a partial arrival/departure day needs at least one meal"
+          : `only ${count("DINING")} DINING block(s) — need breakfast, lunch, dinner`,
+        day.dayNumber);
+    }
+    if (count("ACTIVITIES") < 1 && !partialDay) err("activities-coverage", where, "no ACTIVITIES block", day.dayNumber);
+    const minTransport = partialDay ? 1 : 2;
+    if (count("TRANSPORT") < minTransport) warn("transport-coverage", where, `only ${count("TRANSPORT")} TRANSPORT block(s) — traveler may be stranded between venues`, day.dayNumber);
 
     // Budget cap (traveler-stated, e.g. "€50/day") — checked against the
     // SELECTED options, i.e. what the traveler actually pays by default
@@ -120,15 +134,18 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
       }
     }
 
-    // Meal-slot coverage
+    // Meal-slot coverage — arrival days have no morning at the destination,
+    // departure days have no evening
     const diningTimes = day.blocks
       .filter((b) => b.category === "DINING")
       .map((b) => timeToMinutes(b.scheduledTime))
       .filter((t): t is number => t !== null);
     if (diningTimes.length > 0) {
-      if (!diningTimes.some((t) => t < 11 * 60)) warn("breakfast-slot", where, "no DINING block before 11:00", day.dayNumber);
-      if (!diningTimes.some((t) => t >= 11 * 60 && t < 16 * 60)) warn("lunch-slot", where, "no DINING block between 11:00-16:00", day.dayNumber);
-      if (!diningTimes.some((t) => t >= 17 * 60)) warn("dinner-slot", where, "no DINING block after 17:00", day.dayNumber);
+      if (!isArrival) {
+        if (!diningTimes.some((t) => t < 11 * 60)) warn("breakfast-slot", where, "no DINING block before 11:00", day.dayNumber);
+        if (!diningTimes.some((t) => t >= 11 * 60 && t < 16 * 60)) warn("lunch-slot", where, "no DINING block between 11:00-16:00", day.dayNumber);
+      }
+      if (!isDeparture && !diningTimes.some((t) => t >= 17 * 60)) warn("dinner-slot", where, "no DINING block after 17:00", day.dayNumber);
     }
 
     // Chronological order

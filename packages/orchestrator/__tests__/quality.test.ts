@@ -141,10 +141,28 @@ describe("validatePlanQuality — day-level rules", () => {
     expect(report.issues.some((i) => i.rule === "stays-coverage" && i.dayNumber === 1)).toBe(true);
   });
 
-  it("flags a day with fewer than 3 DINING blocks", () => {
-    const plan = goodPlan(1);
-    plan.days[0]!.blocks = plan.days[0]!.blocks.filter((b) => b.blockId !== "d1_b8");
-    expect(validatePlanQuality(plan).issues.some((i) => i.rule === "dining-coverage")).toBe(true);
+  it("flags a FULL day with fewer than 3 DINING blocks", () => {
+    const plan = goodPlan(3);
+    // day 2 is a full (middle) day — strip its dinner
+    plan.days[1]!.blocks = plan.days[1]!.blocks.filter((b) => b.blockId !== "d2_b8");
+    expect(validatePlanQuality(plan).issues.some((i) => i.rule === "dining-coverage" && i.dayNumber === 2)).toBe(true);
+  });
+
+  it("allows a partial ARRIVAL day with check-in, one activity and dinner only", () => {
+    const plan = goodPlan(3);
+    // arrival day: STAYS + evening transport + dinner
+    plan.days[0]!.blocks = plan.days[0]!.blocks.filter((b) =>
+      ["d1_b1", "d1_b7", "d1_b8"].includes(b.blockId));
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "dining-coverage" && i.dayNumber === 1)).toBe(false);
+    expect(report.issues.some((i) => i.rule === "activities-coverage" && i.dayNumber === 1)).toBe(false);
+    expect(report.issues.some((i) => i.rule === "breakfast-slot" && i.dayNumber === 1)).toBe(false);
+  });
+
+  it("still requires at least one meal on a partial day", () => {
+    const plan = goodPlan(2);
+    plan.days[0]!.blocks = plan.days[0]!.blocks.filter((b) => b.category !== "DINING");
+    expect(validatePlanQuality(plan).issues.some((i) => i.rule === "dining-coverage" && i.dayNumber === 1)).toBe(true);
   });
 
   it("flags out-of-order blocks", () => {
