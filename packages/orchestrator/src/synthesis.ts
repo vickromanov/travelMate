@@ -313,8 +313,24 @@ async function synthesizeBatch(
   hotelHint?: string,
 ): Promise<Record<string, unknown>> {
   const expectedDays = batchEnd - batchStart + 1;
+  let res;
+  try {
+    res = await runBatchLLM();
+  } catch (err) {
+    // Translate the internal "validation failed at tier X" into something a
+    // traveler can act on; the real reasons are in the server log (see reject()).
+    throw new Error(
+      `The AI could not produce a valid schedule for day${expectedDays > 1 ? "s" : ""} ` +
+      `${batchStart}${expectedDays > 1 ? `–${batchEnd}` : ""} after several attempts. ` +
+      `This is usually temporary — please try again. (${err instanceof Error ? err.message : err})`,
+    );
+  }
 
-  const res = await llm.run(
+  const json = extractJSON(res.text);
+  return JSON.parse(json) as Record<string, unknown>;
+
+  function runBatchLLM() {
+    return llm.run(
     {
       stage: "synthesis",
       system: SYSTEM,
@@ -322,20 +338,35 @@ async function synthesizeBatch(
       user: buildBatchPrompt(brief, batchStart, batchEnd, totalDays, tripStartDate, hotelHint),
     },
     (text) => {
+      // ALWAYS log the reason on rejection — silent validation failures cost
+      // us a full escalate-to-frontier cycle once; never again.
+      const reject = (reason: string) => {
+        console.warn(`[synthesis] batch ${batchStart}-${batchEnd} response rejected: ${reason}`);
+        return false;
+      };
       try {
         const json = extractJSON(text);
         const raw = JSON.parse(json) as Record<string, unknown>;
         const days = raw["days"] as Array<{ blocks?: unknown[] }> | undefined;
-        if (!Array.isArray(days) || days.length < expectedDays) return false;
-        return days.every((d) => Array.isArray(d.blocks) && d.blocks.length >= 3);
-      } catch {
-        return false;
+        if (!Array.isArray(days)) return reject("no days array");
+        if (days.length < expectedDays) return reject(`expected ${expectedDays} days, got ${days.length}`);
+        for (let i = 0; i < days.length; i++) {
+          const dayNumber = batchStart + i;
+          // Arrival (1) and departure (totalDays) days are partial — as few as
+          // 2 blocks (check-in + dinner) is a legitimate schedule.
+          const minBlocks = dayNumber === 1 || dayNumber === totalDays ? 2 : 3;
+          const blocks = days[i]?.blocks;
+          if (!Array.isArray(blocks) || blocks.length < minBlocks) {
+            return reject(`day ${dayNumber} has ${Array.isArray(blocks) ? blocks.length : "no"} blocks (min ${minBlocks})`);
+          }
+        }
+        return true;
+      } catch (err) {
+        return reject(`unparseable JSON (${err instanceof Error ? err.message.slice(0, 60) : err})`);
       }
     },
-  );
-
-  const json = extractJSON(res.text);
-  return JSON.parse(json) as Record<string, unknown>;
+    );
+  }
 }
 
 export async function synthesizePlan(
