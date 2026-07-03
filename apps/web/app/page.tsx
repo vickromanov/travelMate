@@ -1,32 +1,9 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import type { Money, TravelOption, Block, DayPlan, TripPlan } from "../src/lib/plan-types";
+import { downloadItineraryPdf } from "../src/pdf/export-pdf";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-
-// ── Types (mirror contracts without importing the package on the client) ──────
-
-interface Money { amount: number; currency: string; }
-interface GeoLocation { lat: number; lng: number; address: string; }
-interface TravelOption {
-  id: string; tier: string; title: string; description: string;
-  reasoning: string; price: Money; location: GeoLocation;
-  openingHours?: string; phoneNumber?: string;
-  bookingUrl?: string; scheduledTime?: string; durationMinutes?: number;
-  link?: string;
-}
-interface Block {
-  blockId: string; category: string; scheduledTime: string;
-  label?: string; selectedOptionId: string; dependencyLogic: string;
-  options: TravelOption[];
-}
-interface DayPlan {
-  dayNumber: number; date: string; title: string; theme: string;
-  dailyTips: string[]; blocks: Block[];
-}
-interface TripPlan {
-  planId: string; title: string; description: string;
-  totalEstimatedCost: Money; duration: string; days: DayPlan[];
-}
 
 // ── Swap logic ───────────────────────────────────────────────────────────────
 
@@ -485,9 +462,23 @@ function DayView({ day, onSwap }: { day: DayPlan; onSwap: (blockId: string, opti
 function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onReset: () => void }) {
   const [plan, setPlan] = useState(initialPlan);
   const [activeDay, setActiveDay] = useState(0);
+  const [exporting, setExporting] = useState(false);
 
   function handleSwap(blockId: string, optionId: string) {
     setPlan((prev) => swapOption(prev, blockId, optionId));
+  }
+
+  async function handleExportPdf() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await downloadItineraryPdf(plan);
+    } catch (err) {
+      console.error("PDF export failed:", err);
+      alert("Could not generate the PDF — please try again.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   const firstDate = plan.days[0]?.date;
@@ -506,17 +497,34 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
             <div style={{ fontSize: 12, letterSpacing: 2.5, textTransform: "uppercase", fontWeight: 700, opacity: 0.75 }}>
               ✈ TravelMate itinerary
             </div>
-            <button
-              onClick={onReset}
-              style={{
-                padding: "8px 18px", background: "rgba(255,255,255,0.14)",
-                border: "1px solid rgba(255,255,255,0.35)", borderRadius: 999,
-                color: "#fff", fontSize: 13, fontWeight: 600, flexShrink: 0,
-                backdropFilter: "blur(4px)",
-              }}
-            >
-              + New trip
-            </button>
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <button
+                onClick={handleExportPdf}
+                disabled={exporting}
+                title="Export the itinerary with your chosen options as a PDF"
+                style={{
+                  padding: "8px 18px",
+                  background: exporting ? "rgba(255,255,255,0.25)" : "var(--accent)",
+                  border: "none", borderRadius: 999,
+                  color: "#fff", fontSize: 13, fontWeight: 700,
+                  boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
+                  cursor: exporting ? "wait" : "pointer",
+                }}
+              >
+                {exporting ? "Preparing…" : "⬇ Download PDF"}
+              </button>
+              <button
+                onClick={onReset}
+                style={{
+                  padding: "8px 18px", background: "rgba(255,255,255,0.14)",
+                  border: "1px solid rgba(255,255,255,0.35)", borderRadius: 999,
+                  color: "#fff", fontSize: 13, fontWeight: 600,
+                  backdropFilter: "blur(4px)",
+                }}
+              >
+                + New trip
+              </button>
+            </div>
           </div>
 
           <h1 style={{ fontSize: 42, fontWeight: 900, lineHeight: 1.12, margin: "18px 0 10px", maxWidth: 640 }}>
@@ -567,8 +575,33 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
       </div>
 
       {/* Active day timeline */}
-      <div style={{ maxWidth: 860, margin: "0 auto", padding: "34px 24px 80px" }}>
+      <div style={{ maxWidth: 860, margin: "0 auto", padding: "34px 24px 40px" }}>
         {plan.days[activeDay] && <DayView day={plan.days[activeDay]!} onSwap={handleSwap} />}
+      </div>
+
+      {/* Export CTA — where the traveler lands after reviewing their choices */}
+      <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 24px 80px" }}>
+        <div className="card" style={{
+          padding: "22px 26px", display: "flex", justifyContent: "space-between",
+          alignItems: "center", gap: 16, flexWrap: "wrap",
+        }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "var(--navy)" }}>
+              Happy with your choices?
+            </div>
+            <div style={{ fontSize: 13.5, color: "var(--ink-soft)", marginTop: 2 }}>
+              Export the itinerary with your selected options — take it offline, print it, share it.
+            </div>
+          </div>
+          <button
+            className="btn-primary"
+            onClick={handleExportPdf}
+            disabled={exporting}
+            style={{ padding: "12px 26px", fontSize: 14.5, flexShrink: 0 }}
+          >
+            {exporting ? "Preparing…" : "⬇ Download PDF"}
+          </button>
+        </div>
       </div>
     </div>
   );
