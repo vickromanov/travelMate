@@ -43,6 +43,18 @@ The FINAL day is the DEPARTURE day.
   - NO dinner or evening program on the final day unless a late departure is stated.
 If the traveler states arrival/departure times, schedule around those instead.
 
+=== DOOR-TO-DOOR JOURNEY LEGS (when the origin is known) ===
+If the traveler's origin city is known, the itinerary covers the WHOLE journey:
+  - Day 1 BEGINS with a TRANSPORT block for the outbound journey (origin → destination),
+    using their stated mode (car/train/flight) and stated departure time. Estimate a
+    realistic travel duration; check-in comes after the arrival time that implies.
+  - The FINAL day ENDS with a TRANSPORT block for the return journey (destination → origin).
+  - If a "must be back by" deadline is stated, BACK-COMPUTE the return departure:
+    deadline − travel duration − 30 min buffer. Fill the final day's program (checkout,
+    lunch, a last activity) up to that departure time — do NOT end the day hours early.
+  - Car journeys: include the route (e.g. "via A93"), distance, duration and a
+    Google Maps driving directions link between the exact addresses.
+
 === NAMED ACCOMMODATION ===
 If the traveler has already booked or named their hotel, that EXACT property is the
 ANCHOR option of EVERY STAYS block — never invent a different default. Other tiers
@@ -264,6 +276,7 @@ ${f.freeformText ?? f.travelerDescription}
 
 TRIP FACTS:
 - Destination: ${f.destination}
+- Origin: ${f.origin ?? "not stated — start the itinerary at the destination"}
 - Trip type: ${f.tripType}
 - Party: ${party}
 - Budget: ${f.budgetTier}${cap ? ` (hard cap ${cap.currency} ${cap.amount}/day)` : ""}
