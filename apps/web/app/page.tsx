@@ -85,7 +85,9 @@ const TIER_META: Record<string, { label: string; color: string; soft: string }> 
 };
 
 function fmtMoney(m: Money): string {
-  return m.amount > 0 ? `${m.currency} ${m.amount.toLocaleString()}` : "Free";
+  // "~" — prices are party-total ESTIMATES until live fetchers land (P1:
+  // an estimate must never masquerade as a confirmed price)
+  return m.amount > 0 ? `~${m.currency} ${m.amount.toLocaleString()}` : "Free";
 }
 
 function fmtDate(iso: string, opts: Intl.DateTimeFormatOptions): string {

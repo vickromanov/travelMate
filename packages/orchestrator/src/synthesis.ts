@@ -60,6 +60,19 @@ If the traveler has already booked or named their hotel, that EXACT property is 
 ANCHOR option of EVERY STAYS block — never invent a different default. Other tiers
 may offer alternatives, clearly framed as "if you weren't already booked".
 
+=== PRICING — EVERY PRICE IS THE TOTAL FOR THE WHOLE PARTY ===
+The "price" of an option is what the ENTIRE party actually pays for that block.
+NEVER a per-person or single-room rate. Concretely:
+  - STAYS: total for ALL rooms needed for ONE night, priced for the real party.
+    2 adults + 2 children do NOT fit one double room: price a family room or
+    2 rooms, and NAME the configuration in the description (e.g. "2× double room").
+  - DINING: the full meal for the whole party (4 people = 4 meals + drinks).
+  - ACTIVITIES: the sum of all tickets (adult and child rates where they differ).
+  - TRANSPORT: the total fare for everyone (or the full fuel/toll cost when driving).
+If the traveler states what they actually paid (e.g. "we paid 500 EUR for two rooms"),
+use that EXACT amount for the ANCHOR option — never re-estimate a price they gave you.
+Prices are best-effort estimates unless stated by the traveler — err realistic, not optimistic.
+
 === REQUIRED JSON OUTPUT SCHEMA ===
 
 {
@@ -451,6 +464,7 @@ export async function synthesizePlan(
   const qualityOpts = {
     dailyBudgetCap: brief.facts.budgetDailyCap,
     partyAdults: brief.facts.partyAdults,
+    partyChildren: brief.facts.partyChildren,
   };
   let report = validatePlanQuality(plan, qualityOpts);
 

@@ -259,6 +259,27 @@ describe("validatePlanQuality — budget cap", () => {
   });
 });
 
+describe("validatePlanQuality — party-aware stays pricing", () => {
+  it("warns when a party of 4 gets a STAYS option without a room configuration", () => {
+    const plan = goodPlan(1);
+    const report = validatePlanQuality(plan, { partyAdults: 2, partyChildren: 2 });
+    expect(report.issues.some((i) => i.rule === "stays-room-config")).toBe(true);
+  });
+
+  it("passes when the STAYS option names the room configuration", () => {
+    const plan = goodPlan(1);
+    const stays = plan.days[0]!.blocks.find((b) => b.category === "STAYS")!;
+    for (const o of stays.options) o.description = "2× double room, breakfast included";
+    const report = validatePlanQuality(plan, { partyAdults: 2, partyChildren: 2 });
+    expect(report.issues.some((i) => i.rule === "stays-room-config")).toBe(false);
+  });
+
+  it("does not warn for a couple", () => {
+    const report = validatePlanQuality(goodPlan(1), { partyAdults: 2, partyChildren: 0 });
+    expect(report.issues.some((i) => i.rule === "stays-room-config")).toBe(false);
+  });
+});
+
 describe("enforceBudgetBySwaps", () => {
   function planWithCheaperOptions(): TripPlan {
     const plan = goodPlan(1);

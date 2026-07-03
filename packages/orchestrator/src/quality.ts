@@ -15,6 +15,8 @@ export interface QualityOptions {
   dailyBudgetCap?: Money;
   /** Used to scale the per-person cap to the whole party. Defaults to 1. */
   partyAdults?: number;
+  /** With partyAdults, drives the room-configuration check on STAYS options. */
+  partyChildren?: number;
 }
 
 export interface QualityIssue {
@@ -197,6 +199,18 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
           warn("plausible-coords", bWhere, `option "${o.title}" has (0,0) coordinates`, day.dayNumber);
         } else if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
           err("plausible-coords", bWhere, `option "${o.title}" has out-of-range coordinates (${lat}, ${lng})`, day.dayNumber);
+        }
+      }
+
+      // STAYS pricing must reflect the real party: 3+ people don't fit one
+      // double room — the option must say which room configuration it prices.
+      const partySize = Math.max(1, opts.partyAdults ?? 1) + (opts.partyChildren ?? 0);
+      if (b.category === "STAYS" && partySize > 2) {
+        const sel = b.options.find((o) => o.id === b.selectedOptionId) ?? b.options[0];
+        if (sel && !/family room|famil|suite|apartment|2\s*(x|×)|two rooms|triple|quad|connecting|rooms for/i.test(`${sel.title} ${sel.description}`)) {
+          warn("stays-room-config", bWhere,
+            `party of ${partySize} but option "${sel.title}" does not state a room configuration — price may be for one room/person`,
+            day.dayNumber);
         }
       }
 
