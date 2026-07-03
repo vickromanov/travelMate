@@ -25,7 +25,9 @@ export type Money = z.infer<typeof MoneySchema>;
 export const GeoLocationSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
-  address: z.string().min(1),
+  // LLMs routinely drop the address on secondary options — degrade to ""
+  // (the orchestrator quality validator warns) rather than failing the plan.
+  address: z.string().nullish().transform((v) => v ?? ""),
 });
 export type GeoLocation = z.infer<typeof GeoLocationSchema>;
 

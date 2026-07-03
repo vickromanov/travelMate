@@ -172,6 +172,9 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
         if (!o.description || !o.reasoning) {
           warn("option-completeness", bWhere, `option "${o.title}" is missing its ${!o.description ? "description" : "reasoning"}`, day.dayNumber);
         }
+        if (!o.location.address && b.category !== "TRANSPORT") {
+          warn("option-completeness", bWhere, `option "${o.title}" has no street address`, day.dayNumber);
+        }
         const { lat, lng } = o.location;
         if (lat === 0 && lng === 0) {
           warn("plausible-coords", bWhere, `option "${o.title}" has (0,0) coordinates`, day.dayNumber);

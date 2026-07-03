@@ -72,9 +72,10 @@ Do NOT stop after 1 block. Generate ALL blocks for the day before moving to the 
               "description": "Same neighbourhood, significantly cheaper, still highly rated",
               "reasoning": "Smart hack: near-identical quality, lower spend, saves budget for dinner",
               "price": { "amount": 8, "currency": "EUR" },
-              "location": { "lat": 38.717, "lng": -9.140, "address": "..." },
-              "openingHours": "...",
-              "phoneNumber": "..."
+              "location": { "lat": 38.717, "lng": -9.140, "address": "Rua Augusta 25, Lisbon" },
+              "openingHours": "07:30-20:00",
+              "phoneNumber": "+351 21 000 0002",
+              "link": "https://www.google.com/maps/search/?api=1&query=Venue+Name+City"
             },
             {
               "id": "d1_b1_o3",
@@ -83,9 +84,10 @@ Do NOT stop after 1 block. Generate ALL blocks for the day before moving to the 
               "description": "Best-in-class, exclusive, elevated experience",
               "reasoning": "For when the traveler wants to treat themselves — Michelin-worthy or 5-star equivalent",
               "price": { "amount": 45, "currency": "EUR" },
-              "location": { "lat": 38.718, "lng": -9.141, "address": "..." },
-              "openingHours": "...",
-              "phoneNumber": "..."
+              "location": { "lat": 38.718, "lng": -9.141, "address": "Avenida da Liberdade 100, Lisbon" },
+              "openingHours": "12:00-23:00",
+              "phoneNumber": "+351 21 000 0003",
+              "link": "https://www.luxuryvenuewebsite.com"
             },
             {
               "id": "d1_b1_o4",
@@ -94,9 +96,10 @@ Do NOT stop after 1 block. Generate ALL blocks for the day before moving to the 
               "description": "Off-the-beaten-path, no tourist traps, beloved by locals",
               "reasoning": "Avoids all chains and mainstream spots — authentic local experience",
               "price": { "amount": 10, "currency": "EUR" },
-              "location": { "lat": 38.716, "lng": -9.139, "address": "..." },
-              "openingHours": "...",
-              "phoneNumber": "..."
+              "location": { "lat": 38.716, "lng": -9.139, "address": "Beco do Surra 7, Lisbon" },
+              "openingHours": "09:00-19:00",
+              "phoneNumber": "+351 21 000 0004",
+              "link": "https://www.google.com/maps/search/?api=1&query=Hidden+Gem+City"
             }
           ]
         }
@@ -104,6 +107,14 @@ Do NOT stop after 1 block. Generate ALL blocks for the day before moving to the 
     }
   ]
 }
+
+=== FIELD COMPLETENESS — APPLIES TO ALL 4 OPTIONS OF EVERY BLOCK ===
+EVERY option — not just the first — must carry COMPLETE data:
+  - "location" with real lat, lng AND a full street "address" (never omit, never "...")
+  - "openingHours" and "phoneNumber" for DINING and ACTIVITIES
+  - "link" per the link rules below
+Never abbreviate fields with "..." or drop them on later options. An option without
+an address is useless to a traveler standing in the street.
 
 === THE FOUR OPTION TIERS — MANDATORY ON EVERY BLOCK ===
 
