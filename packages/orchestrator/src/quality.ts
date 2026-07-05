@@ -15,6 +15,8 @@ export interface QualityOptions {
   dailyBudgetCap?: Money;
   /** Used to scale the per-person cap to the whole party. Defaults to 1. */
   partyAdults?: number;
+  /** With partyAdults, drives the room-configuration check on STAYS options. */
+  partyChildren?: number;
 }
 
 export interface QualityIssue {
@@ -94,12 +96,26 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
       err("dates-sequential", where, `expected date ${expectedDate}, got ${day.date}`, day.dayNumber);
     }
 
-    // Category coverage — the zero-thinking floor for a full travel day
+    // Category coverage — the zero-thinking floor. Arrival (first) and
+    // departure (last) days are PARTIAL days: the traveler is only at the
+    // destination for part of them, so a single meal is legitimate.
+    const isArrival = i === 0;
+    const isDeparture = i === plan.days.length - 1;
+    const partialDay = isArrival || isDeparture;
+
     const count = (cat: string) => day.blocks.filter((b) => b.category === cat).length;
     if (count("STAYS") < 1) err("stays-coverage", where, "no STAYS block — traveler has no accommodation anchor", day.dayNumber);
-    if (count("DINING") < 3) err("dining-coverage", where, `only ${count("DINING")} DINING block(s) — need breakfast, lunch, dinner`, day.dayNumber);
-    if (count("ACTIVITIES") < 1) err("activities-coverage", where, "no ACTIVITIES block", day.dayNumber);
-    if (count("TRANSPORT") < 2) warn("transport-coverage", where, `only ${count("TRANSPORT")} TRANSPORT block(s) — traveler may be stranded between venues`, day.dayNumber);
+    const minDining = partialDay ? 1 : 3;
+    if (count("DINING") < minDining) {
+      err("dining-coverage", where,
+        partialDay
+          ? "no DINING block — even a partial arrival/departure day needs at least one meal"
+          : `only ${count("DINING")} DINING block(s) — need breakfast, lunch, dinner`,
+        day.dayNumber);
+    }
+    if (count("ACTIVITIES") < 1 && !partialDay) err("activities-coverage", where, "no ACTIVITIES block", day.dayNumber);
+    const minTransport = partialDay ? 1 : 2;
+    if (count("TRANSPORT") < minTransport) warn("transport-coverage", where, `only ${count("TRANSPORT")} TRANSPORT block(s) — traveler may be stranded between venues`, day.dayNumber);
 
     // Budget cap (traveler-stated, e.g. "€50/day") — checked against the
     // SELECTED options, i.e. what the traveler actually pays by default
@@ -120,15 +136,18 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
       }
     }
 
-    // Meal-slot coverage
+    // Meal-slot coverage — arrival days have no morning at the destination,
+    // departure days have no evening
     const diningTimes = day.blocks
       .filter((b) => b.category === "DINING")
       .map((b) => timeToMinutes(b.scheduledTime))
       .filter((t): t is number => t !== null);
     if (diningTimes.length > 0) {
-      if (!diningTimes.some((t) => t < 11 * 60)) warn("breakfast-slot", where, "no DINING block before 11:00", day.dayNumber);
-      if (!diningTimes.some((t) => t >= 11 * 60 && t < 16 * 60)) warn("lunch-slot", where, "no DINING block between 11:00-16:00", day.dayNumber);
-      if (!diningTimes.some((t) => t >= 17 * 60)) warn("dinner-slot", where, "no DINING block after 17:00", day.dayNumber);
+      if (!isArrival) {
+        if (!diningTimes.some((t) => t < 11 * 60)) warn("breakfast-slot", where, "no DINING block before 11:00", day.dayNumber);
+        if (!diningTimes.some((t) => t >= 11 * 60 && t < 16 * 60)) warn("lunch-slot", where, "no DINING block between 11:00-16:00", day.dayNumber);
+      }
+      if (!isDeparture && !diningTimes.some((t) => t >= 17 * 60)) warn("dinner-slot", where, "no DINING block after 17:00", day.dayNumber);
     }
 
     // Chronological order
@@ -172,11 +191,28 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
         if (!o.description || !o.reasoning) {
           warn("option-completeness", bWhere, `option "${o.title}" is missing its ${!o.description ? "description" : "reasoning"}`, day.dayNumber);
         }
+        if (!o.location.address && b.category !== "TRANSPORT") {
+          warn("option-completeness", bWhere, `option "${o.title}" has no street address`, day.dayNumber);
+        }
         const { lat, lng } = o.location;
         if (lat === 0 && lng === 0) {
           warn("plausible-coords", bWhere, `option "${o.title}" has (0,0) coordinates`, day.dayNumber);
         } else if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
           err("plausible-coords", bWhere, `option "${o.title}" has out-of-range coordinates (${lat}, ${lng})`, day.dayNumber);
+        }
+      }
+
+      // STAYS pricing must reflect the real party: 3+ people don't fit one
+      // double room. Error severity — the repair pass must restate the option
+      // with the room count and the multiplied total (rooms × per-room rate).
+      const partySize = Math.max(1, opts.partyAdults ?? 1) + (opts.partyChildren ?? 0);
+      if (b.category === "STAYS" && partySize > 2) {
+        const sel = b.options.find((o) => o.id === b.selectedOptionId) ?? b.options[0];
+        if (sel && !/family room|famil|suite|apartment|\d\s*(x|×)\s*(double|twin|room)|two rooms|triple|quad|connecting|rooms ×|rooms for/i.test(`${sel.title} ${sel.description}`)) {
+          err("stays-room-config", bWhere,
+            `party of ${partySize} but option "${sel.title}" does not state a room configuration — ` +
+            `describe the rooms needed (e.g. "2 rooms × EUR 250 = EUR 500/night") and set price to the multiplied total`,
+            day.dayNumber);
         }
       }
 

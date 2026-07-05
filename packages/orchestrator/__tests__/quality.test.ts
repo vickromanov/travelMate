@@ -141,10 +141,28 @@ describe("validatePlanQuality — day-level rules", () => {
     expect(report.issues.some((i) => i.rule === "stays-coverage" && i.dayNumber === 1)).toBe(true);
   });
 
-  it("flags a day with fewer than 3 DINING blocks", () => {
-    const plan = goodPlan(1);
-    plan.days[0]!.blocks = plan.days[0]!.blocks.filter((b) => b.blockId !== "d1_b8");
-    expect(validatePlanQuality(plan).issues.some((i) => i.rule === "dining-coverage")).toBe(true);
+  it("flags a FULL day with fewer than 3 DINING blocks", () => {
+    const plan = goodPlan(3);
+    // day 2 is a full (middle) day — strip its dinner
+    plan.days[1]!.blocks = plan.days[1]!.blocks.filter((b) => b.blockId !== "d2_b8");
+    expect(validatePlanQuality(plan).issues.some((i) => i.rule === "dining-coverage" && i.dayNumber === 2)).toBe(true);
+  });
+
+  it("allows a partial ARRIVAL day with check-in, one activity and dinner only", () => {
+    const plan = goodPlan(3);
+    // arrival day: STAYS + evening transport + dinner
+    plan.days[0]!.blocks = plan.days[0]!.blocks.filter((b) =>
+      ["d1_b1", "d1_b7", "d1_b8"].includes(b.blockId));
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "dining-coverage" && i.dayNumber === 1)).toBe(false);
+    expect(report.issues.some((i) => i.rule === "activities-coverage" && i.dayNumber === 1)).toBe(false);
+    expect(report.issues.some((i) => i.rule === "breakfast-slot" && i.dayNumber === 1)).toBe(false);
+  });
+
+  it("still requires at least one meal on a partial day", () => {
+    const plan = goodPlan(2);
+    plan.days[0]!.blocks = plan.days[0]!.blocks.filter((b) => b.category !== "DINING");
+    expect(validatePlanQuality(plan).issues.some((i) => i.rule === "dining-coverage" && i.dayNumber === 1)).toBe(true);
   });
 
   it("flags out-of-order blocks", () => {
@@ -238,6 +256,37 @@ describe("validatePlanQuality — budget cap", () => {
 
   it("ignores budget when no cap is provided", () => {
     expect(validatePlanQuality(goodPlan(1)).issues.some((i) => i.rule === "budget-cap")).toBe(false);
+  });
+});
+
+describe("validatePlanQuality — party-aware stays pricing", () => {
+  it("errors when a party of 4 gets a STAYS option without a room configuration", () => {
+    const plan = goodPlan(1);
+    const report = validatePlanQuality(plan, { partyAdults: 2, partyChildren: 2 });
+    const issue = report.issues.find((i) => i.rule === "stays-room-config");
+    expect(issue?.severity).toBe("error"); // error → triggers the repair pass
+    expect(report.ok).toBe(false);
+  });
+
+  it("passes when the STAYS option shows the room math", () => {
+    const plan = goodPlan(1);
+    const stays = plan.days[0]!.blocks.find((b) => b.category === "STAYS")!;
+    for (const o of stays.options) o.description = "2 rooms × EUR 250 = EUR 500/night, breakfast included";
+    const report = validatePlanQuality(plan, { partyAdults: 2, partyChildren: 2 });
+    expect(report.issues.some((i) => i.rule === "stays-room-config")).toBe(false);
+  });
+
+  it("accepts a family room as a valid configuration", () => {
+    const plan = goodPlan(1);
+    const stays = plan.days[0]!.blocks.find((b) => b.category === "STAYS")!;
+    for (const o of stays.options) o.description = "Spacious family room for 4 with two extra beds";
+    const report = validatePlanQuality(plan, { partyAdults: 2, partyChildren: 2 });
+    expect(report.issues.some((i) => i.rule === "stays-room-config")).toBe(false);
+  });
+
+  it("does not flag a couple", () => {
+    const report = validatePlanQuality(goodPlan(1), { partyAdults: 2, partyChildren: 0 });
+    expect(report.issues.some((i) => i.rule === "stays-room-config")).toBe(false);
   });
 });
 

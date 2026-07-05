@@ -20,7 +20,8 @@
     "@travelmate/contracts": "workspace:*",
     "@travelmate/database": "workspace:*",
     "@travelmate/fetchers": "workspace:*",
-    "@travelmate/llm": "workspace:*"
+    "@travelmate/llm": "workspace:*",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@travelmate/config": "workspace:*",

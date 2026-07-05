@@ -43,6 +43,7 @@ export async function planRoutes(app: FastifyInstance) {
     // Fire-and-forget: pipeline runs while client connects to SSE
     void orchestrate(info, deps, {
       onThought: (thought) => bus.emit("thought", thought),
+      onPartialPlan: (partial) => bus.emit("partial", partial),
       onError: (err) => {
         bus.emit("error", err.message);
         unsubscribe();
@@ -74,6 +75,7 @@ export async function planRoutes(app: FastifyInstance) {
     reply.raw.flushHeaders?.();
 
     const onThought = (thought: string) => sseWrite(reply, "thought", { text: thought });
+    const onPartial = (plan: TripPlan) => sseWrite(reply, "partial", plan);
     const onReady = (plan: TripPlan) => {
       sseWrite(reply, "ready", plan);
       cleanup();
@@ -87,11 +89,13 @@ export async function planRoutes(app: FastifyInstance) {
 
     function cleanup() {
       bus.off("thought", onThought);
+      bus.off("partial", onPartial);
       bus.off("ready", onReady);
       bus.off("error", onError);
     }
 
     bus.on("thought", onThought);
+    bus.on("partial", onPartial);
     bus.on("ready", onReady);
     bus.on("error", onError);
 

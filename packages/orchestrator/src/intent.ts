@@ -43,7 +43,10 @@ INFERENCE RULES:
     • Season words: "summer" → Jun-Aug; "winter" → Dec-Feb; "spring" → Mar-May; "fall"/"autumn" → Sep-Nov.
     • Month names: "in October" → 1st of that month, next occurrence.
     • If no date context at all → 30 days from today.
-    • ALWAYS set BOTH startDate and endDate (compute endDate = startDate + duration).
+    • startDate = ARRIVAL day, endDate = DEPARTURE day, both INCLUSIVE.
+      A trip "03.07 to 05.07" spans 3 days. A "3 days" trip → endDate = startDate + 2.
+    • Numeric dates like "03.07" are DD.MM — resolve to the next occurrence from today.
+    • ALWAYS set BOTH startDate and endDate.
 - Party size: "couple"/"us"/"we" → 2 adults 0 children; "solo"/"I am" → 1 adult; "family" → 2 adults 2 children; otherwise 2 adults
 - Budget: "cheap/budget/hostel/backpacker" → ECONOMY; "comfortable/mid-range" → SMART; "luxury/first-class/Michelin" → LUXURY
 - budgetDailyCap: if the traveler states an EXPLICIT numeric budget, capture it normalised to PER DAY:

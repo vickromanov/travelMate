@@ -113,6 +113,9 @@ function BlockRow({ block }: { block: Block }) {
   if (!sel) return null;
 
   const details = [
+    // For stays the description carries the room configuration and its math
+    // ("2 rooms × EUR 250 = EUR 500/night") — essential info, always shown.
+    block.category === "STAYS" ? sel.description : undefined,
     sel.location.address,
     sel.openingHours ? `Open ${sel.openingHours}` : undefined,
     sel.phoneNumber,

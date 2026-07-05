@@ -70,7 +70,12 @@ export const TravelOptionSchema = z.object({
   description: z.string().nullish().transform((v) => v ?? ""),
   reasoning: z.string().nullish().transform((v) => v ?? ""),
   price: MoneySchema,
-  location: GeoLocationSchema,
+  // A wholly missing location degrades to a zeroed one — the quality
+  // validator flags (0,0) coords and empty addresses, but the plan survives.
+  location: z.preprocess(
+    (v) => v ?? { lat: 0, lng: 0, address: "" },
+    GeoLocationSchema,
+  ),
   scheduledTime: optStr(),
   durationMinutes: optNum(z.number().int().positive()),
   bookingRequired: z.boolean().nullish().transform((v) => v ?? undefined),

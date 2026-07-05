@@ -23,6 +23,7 @@ import {
   extractIntent,
   buildFetchPlan,
   resolveData,
+  curateResearch,
   synthesizePlan,
   validatePlanQuality,
   formatQualityReport,
@@ -120,10 +121,15 @@ interface PersonaResult {
 async function runPersona(persona: Persona): Promise<PersonaResult> {
   const llm = createLLMClient();
   const thoughts: string[] = [];
+  let partials = 0;
   const cb = {
     onThought: (t: string) => {
       thoughts.push(t);
       console.log(`    · ${t}`);
+    },
+    onPartialPlan: (p: TripPlan) => {
+      partials++;
+      console.log(`    ▸ PARTIAL #${partials} delivered — ${p.days.length} day(s) ready for review`);
     },
     onError: (e: Error) => console.error(`    ! ${e.message}`),
   };
@@ -133,11 +139,13 @@ async function runPersona(persona: Persona): Promise<PersonaResult> {
     const brief = await extractIntent(persona.input, llm, cb);
     const fetchPlan = await buildFetchPlan(brief);
     const data = await resolveData(fetchPlan, undefined as never); // MVP: no fetchers yet
-    const plan: TripPlan = await synthesizePlan(brief, data, llm, cb);
+    const research = await curateResearch(brief, llm, cb);
+    const plan: TripPlan = await synthesizePlan(brief, data, research, llm, cb);
 
     const report = validatePlanQuality(plan, {
       dailyBudgetCap: brief.facts.budgetDailyCap,
       partyAdults: brief.facts.partyAdults,
+      partyChildren: brief.facts.partyChildren,
     });
     const blocks = plan.days.reduce((s, d) => s + d.blocks.length, 0);
     console.log(`\n${formatQualityReport(report)}\n`);
