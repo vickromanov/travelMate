@@ -16,6 +16,7 @@ import { TripPlanSchema, DayPlanSchema } from "@travelmate/contracts";
 import type { LLMClient } from "@travelmate/llm";
 import { validatePlanQuality, formatQualityReport, enforceBudgetBySwaps } from "./quality.js";
 import { formatResearchForPrompt, type CuratedResearch } from "./curate.js";
+import { buildTripSkeleton, type TripSkeleton, type SkeletonDay } from "./skeleton.js";
 
 const SYSTEM = `You are TravelMate's synthesis engine. Generate a complete, zero-thinking travel itinerary.
 Output ONLY valid JSON — no markdown, no code fences, no comments, no explanation.
@@ -410,53 +411,32 @@ export async function synthesizePlan(
 ): Promise<TripPlan> {
   const { numDays, start } = computeNumDays(brief);
   const researchBlock = research ? formatResearchForPrompt(research) : "";
+  const pid = planId ?? randomUUID();
   cb.onThought(`Composing your ${numDays}-day itinerary for ${brief.facts.destination}…`);
-  cb.onThought(
-    researchBlock
-      ? `Assembling the days from the researched shortlist…`
-      : `Writing a ${brief.facts.partyAdults ?? 2}-person plan, budget: ${brief.facts.budgetTier}…`,
-  );
 
-  // Split into batches of DAYS_PER_BATCH to stay within model output limits
-  const batches: Array<{ start: number; end: number }> = [];
-  for (let d = 1; d <= numDays; d += DAYS_PER_BATCH) {
-    batches.push({ start: d, end: Math.min(d + DAYS_PER_BATCH - 1, numDays) });
-  }
+  // Progressive path: skeleton (hotel per night + activity distribution),
+  // then ONE DAY PER CALL, each streamed to the UX the moment it validates.
+  // Any skeleton failure falls back to the proven 3-day batch path.
+  const skeleton = research
+    ? await buildTripSkeleton(brief, research, numDays, start, llm, cb)
+    : null;
 
-  let merged: Record<string, unknown> | undefined;
-  const allDays: unknown[] = [];
-  let hotelHint: string | undefined;
-
-  for (let i = 0; i < batches.length; i++) {
-    const batch = batches[i]!;
-    cb.onThought(`Generating days ${batch.start}–${batch.end} of ${numDays}…`);
-
-    const raw = await synthesizeBatch(
-      brief, batch.start, batch.end, numDays, start, llm, hotelHint, researchBlock,
+  let merged: Record<string, unknown>;
+  if (skeleton) {
+    merged = await synthesizeProgressive(brief, skeleton, researchBlock, numDays, llm, cb, pid);
+  } else {
+    cb.onThought(
+      researchBlock
+        ? `Assembling the days from the researched shortlist…`
+        : `Writing a ${brief.facts.partyAdults ?? 2}-person plan, budget: ${brief.facts.budgetTier}…`,
     );
-
-    // Extract hotel name from first batch to keep it consistent
-    if (i === 0) {
-      merged = raw;
-      try {
-        const days = raw["days"] as Array<{ blocks: Array<{ category: string; options: Array<{ tier: string; title: string }> }> }>;
-        const staysBlock = days[0]?.blocks.find((b) => b.category === "STAYS");
-        const anchor = staysBlock?.options.find((o) => o.tier === "ANCHOR");
-        if (anchor) hotelHint = anchor.title;
-      } catch { /* ignore */ }
-    }
-
-    const batchDays = raw["days"] as unknown[];
-    allDays.push(...(batchDays ?? []));
+    merged = await synthesizeBatched(brief, researchBlock, numDays, start, llm, cb);
   }
-
-  if (!merged) throw new Error("Synthesis: no batches produced output");
-  merged["days"] = allDays;
 
   cb.onThought("All days generated — validating structure…");
 
   // Inject planId
-  merged["planId"] = planId ?? randomUUID();
+  merged["planId"] = pid;
 
   let plan;
   try {
@@ -501,6 +481,226 @@ export async function synthesizePlan(
   cb.onThought(`Plan ready — ${plan.days.length} days, ${plan.days.reduce((s, d) => s + d.blocks.length, 0)} blocks.`);
 
   return plan;
+}
+
+/** The pre-skeleton path: 3 days per call, no streaming. Kept as the fallback. */
+async function synthesizeBatched(
+  brief: TripBrief,
+  researchBlock: string,
+  numDays: number,
+  start: string,
+  llm: LLMClient,
+  cb: StreamCallbacks,
+): Promise<Record<string, unknown>> {
+  const batches: Array<{ start: number; end: number }> = [];
+  for (let d = 1; d <= numDays; d += DAYS_PER_BATCH) {
+    batches.push({ start: d, end: Math.min(d + DAYS_PER_BATCH - 1, numDays) });
+  }
+
+  let merged: Record<string, unknown> | undefined;
+  const allDays: unknown[] = [];
+  let hotelHint: string | undefined;
+
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i]!;
+    cb.onThought(`Generating days ${batch.start}–${batch.end} of ${numDays}…`);
+
+    const raw = await synthesizeBatch(
+      brief, batch.start, batch.end, numDays, start, llm, hotelHint, researchBlock,
+    );
+
+    // Extract hotel name from first batch to keep it consistent
+    if (i === 0) {
+      merged = raw;
+      try {
+        const days = raw["days"] as Array<{ blocks: Array<{ category: string; options: Array<{ tier: string; title: string }> }> }>;
+        const staysBlock = days[0]?.blocks.find((b) => b.category === "STAYS");
+        const anchor = staysBlock?.options.find((o) => o.tier === "ANCHOR");
+        if (anchor) hotelHint = anchor.title;
+      } catch { /* ignore */ }
+    }
+
+    const batchDays = raw["days"] as unknown[];
+    allDays.push(...(batchDays ?? []));
+  }
+
+  if (!merged) throw new Error("Synthesis: no batches produced output");
+  merged["days"] = allDays;
+  return merged;
+}
+
+/**
+ * The progressive path: one focused LLM call PER DAY, guided by the skeleton.
+ * After each day validates, a partial TripPlan (days so far) is streamed via
+ * onPartialPlan — the traveler reviews day 1 while day 2 is being written.
+ */
+async function synthesizeProgressive(
+  brief: TripBrief,
+  skeleton: TripSkeleton,
+  researchBlock: string,
+  numDays: number,
+  llm: LLMClient,
+  cb: StreamCallbacks,
+  pid: string,
+): Promise<Record<string, unknown>> {
+  const days: DayPlan[] = [];
+
+  const sumSelected = () =>
+    days.reduce(
+      (sum, d) =>
+        sum +
+        d.blocks.reduce((s, b) => {
+          const sel = b.options.find((o) => o.id === b.selectedOptionId) ?? b.options[0];
+          return s + (sel?.price.amount ?? 0);
+        }, 0),
+      0,
+    );
+  const currencyOf = () => days[0]?.blocks[0]?.options[0]?.price.currency ?? "EUR";
+
+  const partialPlan = (): TripPlan => ({
+    planId: pid,
+    title: skeleton.title || `${brief.facts.destination} itinerary`,
+    description: skeleton.description || "",
+    totalEstimatedCost: skeleton.totalEstimatedCost ?? { amount: Math.round(sumSelected()), currency: currencyOf() },
+    duration: `${numDays} Days`,
+    days: [...days],
+    inferenceChain: brief.inferenceChain,
+  });
+
+  for (const sd of skeleton.days) {
+    cb.onThought(`Writing day ${sd.dayNumber} of ${numDays}${sd.title ? ` — ${sd.title}` : ""}…`);
+    const prevDay = days[days.length - 1];
+    const day = await synthesizeDay(brief, sd, numDays, researchBlock, prevDay, llm);
+    days.push(day);
+    cb.onThought(`Day ${sd.dayNumber} ready — ${day.blocks.length} blocks. ${sd.dayNumber < numDays ? "You can start reviewing it while I write the rest." : ""}`);
+    cb.onPartialPlan?.(partialPlan());
+  }
+
+  return {
+    title: skeleton.title || `${brief.facts.destination} itinerary`,
+    description: skeleton.description || "",
+    totalEstimatedCost: skeleton.totalEstimatedCost ?? { amount: Math.round(sumSelected()), currency: currencyOf() },
+    duration: `${numDays} Days`,
+    days,
+    inferenceChain: [],
+  };
+}
+
+/** Generate ONE day from its skeleton entry. Retries once on schema failure. */
+async function synthesizeDay(
+  brief: TripBrief,
+  sd: SkeletonDay,
+  totalDays: number,
+  researchBlock: string,
+  prevDay: DayPlan | undefined,
+  llm: LLMClient,
+): Promise<DayPlan> {
+  const minBlocks = sd.dayNumber === 1 || sd.dayNumber === totalDays ? 2 : 3;
+
+  const extractDay = (text: string): unknown => {
+    const raw = JSON.parse(extractJSON(text)) as Record<string, unknown>;
+    // Accept every shape the model produces: {"day": {...}}, {"days": [{...}]}
+    // (the cacheable schema block teaches the days-array habit), or a bare day.
+    if (raw["day"] && typeof raw["day"] === "object") return raw["day"];
+    if (Array.isArray(raw["days"])) return (raw["days"] as unknown[])[0];
+    return raw;
+  };
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    let res;
+    try {
+      res = await llm.run(
+        {
+          stage: "synthesis",
+          system: SYSTEM,
+          cacheableContext: SCHEMA_BLOCK,
+          user: buildDayPrompt(brief, sd, totalDays, researchBlock, prevDay),
+        },
+        (text) => {
+          try {
+            const day = extractDay(text) as { dayNumber?: number; blocks?: unknown[] };
+            if (!Array.isArray(day.blocks) || day.blocks.length < minBlocks) {
+              console.warn(`[synthesis] day ${sd.dayNumber} rejected: ${Array.isArray(day.blocks) ? day.blocks.length : "no"} blocks (min ${minBlocks})`);
+              return false;
+            }
+            return true;
+          } catch (err) {
+            console.warn(`[synthesis] day ${sd.dayNumber} rejected: unparseable (${err instanceof Error ? err.message.slice(0, 50) : err})`);
+            return false;
+          }
+        },
+      );
+    } catch (err) {
+      throw new Error(
+        `The AI could not produce a valid schedule for day ${sd.dayNumber} after several attempts. ` +
+        `This is usually temporary — please try again. (${err instanceof Error ? err.message : err})`,
+      );
+    }
+
+    const parsed = DayPlanSchema.safeParse(extractDay(res.text));
+    if (parsed.success) {
+      const day = parsed.data;
+      // Normalise against the skeleton (the model occasionally drifts)
+      day.dayNumber = sd.dayNumber;
+      day.date = sd.date;
+      day.blocks.sort((a, b) => {
+        const ta = a.scheduledTime.replace(":", "").padStart(4, "0");
+        const tb = b.scheduledTime.replace(":", "").padStart(4, "0");
+        return ta.localeCompare(tb);
+      });
+      return day;
+    }
+    console.warn(`[synthesis] day ${sd.dayNumber} failed Zod (attempt ${attempt}/2): ${parsed.error.issues[0]?.message}`);
+  }
+  throw new Error(`Day ${sd.dayNumber} could not be generated in a valid format — please try again.`);
+}
+
+function buildDayPrompt(
+  brief: TripBrief,
+  sd: SkeletonDay,
+  totalDays: number,
+  researchBlock: string,
+  prevDay: DayPlan | undefined,
+): string {
+  const f = brief.facts;
+  const adults = f.partyAdults ?? 2;
+  const children = f.partyChildren ?? 0;
+  const party = children > 0 ? `${adults} adults + ${children} children` : `${adults} adult${adults > 1 ? "s" : ""}`;
+  const cap = f.budgetDailyCap;
+
+  const prevEnd = prevDay
+    ? prevDay.blocks[prevDay.blocks.length - 1]?.options.find(
+        (o) => o.id === prevDay.blocks[prevDay.blocks.length - 1]!.selectedOptionId,
+      )?.title
+    : undefined;
+
+  return `TRAVELER PROFILE:
+${brief.travelerProfile}
+
+ORIGINAL TRAVELER REQUEST (verbatim — honour every stated constraint):
+${f.freeformText ?? f.travelerDescription}
+
+TRIP FACTS:
+- Destination: ${f.destination}
+- Origin: ${f.origin ?? "not stated — start the itinerary at the destination"}
+- Party: ${party} | Budget: ${f.budgetTier}${cap ? ` (HARD CAP ${cap.currency} ${cap.amount}/day — ANCHOR selections of this day must sum within it)` : ""}
+- This is day ${sd.dayNumber} of ${totalDays}.
+${sd.dayNumber === 1 ? "- Day 1 is the ARRIVAL day: no destination breakfast/lunch/morning program; begin with the journey/check-in." : ""}
+${sd.dayNumber === totalDays ? `- Day ${totalDays} is the DEPARTURE day: checkout ~11:00, end with the return journey, no evening program.` : ""}
+${researchBlock}
+=== TODAY'S STRUCTURE (decided by the trip architect — follow it) ===
+- Date: ${sd.date} | Title: ${sd.title || "(compose one)"} | Theme: ${sd.theme || "(compose one)"}
+- Base: ${sd.base ?? f.destination}
+- Tonight's hotel: ${sd.hotel || "(pick from candidates)"}${sd.roomConfig ? ` (${sd.roomConfig})` : ""}
+- Morning: ${sd.morning ?? "(free)"}
+- Afternoon: ${sd.afternoon ?? "(free)"}
+- Evening: ${sd.evening ?? "(free)"}
+${prevEnd ? `- The previous day ended at: ${prevEnd} (start today from there).` : ""}
+
+Generate ONLY this single day, expanding today's structure into full blocks with
+transport between venues, meals, exact times and 4 options per block.
+Output a JSON object: {"day": { "dayNumber": ${sd.dayNumber}, "date": "${sd.date}", "title": "...",
+"theme": "...", "dailyTips": [...], "blocks": [ ...same block schema as always... ] }}`;
 }
 
 function sortBlocks(plan: TripPlan): void {

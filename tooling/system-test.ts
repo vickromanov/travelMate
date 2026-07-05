@@ -121,10 +121,15 @@ interface PersonaResult {
 async function runPersona(persona: Persona): Promise<PersonaResult> {
   const llm = createLLMClient();
   const thoughts: string[] = [];
+  let partials = 0;
   const cb = {
     onThought: (t: string) => {
       thoughts.push(t);
       console.log(`    · ${t}`);
+    },
+    onPartialPlan: (p: TripPlan) => {
+      partials++;
+      console.log(`    ▸ PARTIAL #${partials} delivered — ${p.days.length} day(s) ready for review`);
     },
     onError: (e: Error) => console.error(`    ! ${e.message}`),
   };

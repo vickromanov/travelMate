@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import type { Money, TravelOption, Block, DayPlan, TripPlan } from "../src/lib/plan-types";
+import { mergePlans, totalDaysOf } from "../src/lib/merge-plan";
 import { downloadItineraryPdf } from "../src/pdf/export-pdf";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
@@ -461,14 +462,18 @@ function DayView({ day, onSwap }: { day: DayPlan; onSwap: (blockId: string, opti
 
 // ── Itinerary screen ──────────────────────────────────────────────────────────
 
-function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onReset: () => void }) {
-  const [plan, setPlan] = useState(initialPlan);
+function ItineraryScreen({ plan, generating, onSwap, onReset }: {
+  plan: TripPlan;
+  generating: boolean;
+  onSwap: (blockId: string, optionId: string) => void;
+  onReset: () => void;
+}) {
   const [activeDay, setActiveDay] = useState(0);
   const [exporting, setExporting] = useState(false);
 
-  function handleSwap(blockId: string, optionId: string) {
-    setPlan((prev) => swapOption(prev, blockId, optionId));
-  }
+  const totalDays = totalDaysOf(plan);
+  const pendingDays = generating ? Math.max(0, totalDays - plan.days.length) : 0;
+  const handleSwap = onSwap;
 
   async function handleExportPdf() {
     if (exporting) return;
@@ -502,15 +507,15 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
             <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
               <button
                 onClick={handleExportPdf}
-                disabled={exporting}
-                title="Export the itinerary with your chosen options as a PDF"
+                disabled={exporting || generating}
+                title={generating ? "Available when all days are ready" : "Export the itinerary with your chosen options as a PDF"}
                 style={{
                   padding: "8px 18px",
-                  background: exporting ? "rgba(255,255,255,0.25)" : "var(--accent)",
+                  background: exporting || generating ? "rgba(255,255,255,0.25)" : "var(--accent)",
                   border: "none", borderRadius: 999,
                   color: "#fff", fontSize: 13, fontWeight: 700,
-                  boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
-                  cursor: exporting ? "wait" : "pointer",
+                  boxShadow: generating ? "none" : "0 4px 14px rgba(0,0,0,0.25)",
+                  cursor: exporting ? "wait" : generating ? "default" : "pointer",
                 }}
               >
                 {exporting ? "Preparing…" : "⬇ Download PDF"}
@@ -573,7 +578,33 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
               </div>
             </button>
           ))}
+          {/* Ghost tabs for days still being written */}
+          {Array.from({ length: pendingDays }, (_, i) => (
+            <div
+              key={`pending-${i}`}
+              className="day-tab"
+              style={{ padding: "9px 18px", textAlign: "center", opacity: 0.45, cursor: "default" }}
+              title="Still being written…"
+            >
+              <div style={{ fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap" }}>Day {plan.days.length + i + 1}</div>
+              <div style={{ fontSize: 11, opacity: 0.75, whiteSpace: "nowrap" }}>writing…</div>
+            </div>
+          ))}
         </div>
+        {generating && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, marginTop: 10,
+            fontSize: 13, color: "var(--ink-soft)", paddingLeft: 4,
+          }}>
+            <span style={{
+              width: 7, height: 7, borderRadius: "50%", background: "var(--accent)",
+              animation: "pulseDot 1.3s ease infinite", flexShrink: 0,
+            }} />
+            {pendingDays > 0
+              ? `Writing day ${plan.days.length + 1} of ${totalDays} — you can already review and swap the days above.`
+              : "Finishing touches — validating the full itinerary…"}
+          </div>
+        )}
       </div>
 
       {/* Active day timeline */}
@@ -598,10 +629,11 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
           <button
             className="btn-primary"
             onClick={handleExportPdf}
-            disabled={exporting}
+            disabled={exporting || generating}
+            title={generating ? "Available when all days are ready" : undefined}
             style={{ padding: "12px 26px", fontSize: 14.5, flexShrink: 0 }}
           >
-            {exporting ? "Preparing…" : "⬇ Download PDF"}
+            {exporting ? "Preparing…" : generating ? `Writing day ${plan.days.length + 1}…` : "⬇ Download PDF"}
           </button>
         </div>
       </div>
@@ -632,19 +664,37 @@ function ErrorScreen({ message, onReset }: { message: string; onReset: () => voi
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-type Screen = { kind: "input" } | { kind: "thinking"; thoughts: string[] } | { kind: "itinerary"; plan: TripPlan } | { kind: "error"; message: string };
+type Screen =
+  | { kind: "input" }
+  | { kind: "thinking"; thoughts: string[] }
+  | { kind: "itinerary"; plan: TripPlan; generating: boolean }
+  | { kind: "error"; message: string };
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>({ kind: "input" });
   const esRef = useRef<EventSource | null>(null);
+  // Days the traveler already swapped options on — incoming partial/final
+  // updates must never overwrite these (their choices win over regeneration).
+  const swappedDaysRef = useRef<Set<number>>(new Set());
 
   function reset() {
     esRef.current?.close();
     esRef.current = null;
+    swappedDaysRef.current = new Set();
     setScreen({ kind: "input" });
   }
 
+  function handleSwap(blockId: string, optionId: string) {
+    setScreen((s) => {
+      if (s.kind !== "itinerary") return s;
+      const day = s.plan.days.find((d) => d.blocks.some((b) => b.blockId === blockId));
+      if (day) swappedDaysRef.current.add(day.dayNumber);
+      return { ...s, plan: swapOption(s.plan, blockId, optionId) };
+    });
+  }
+
   async function handleSubmit(brief: string) {
+    swappedDaysRef.current = new Set();
     setScreen({ kind: "thinking", thoughts: ["Connecting…"] });
 
     // POST /plan
@@ -680,10 +730,25 @@ export default function Home() {
       setScreen((s) => s.kind === "thinking" ? { kind: "thinking", thoughts: [...s.thoughts, text] } : s);
     });
 
+    // Progressive delivery: each completed day arrives as a partial plan —
+    // show it immediately so the traveler can review while the rest is written
+    es.addEventListener("partial", (e) => {
+      const incoming = JSON.parse((e as MessageEvent).data) as TripPlan;
+      setScreen((s) => ({
+        kind: "itinerary",
+        plan: mergePlans(s.kind === "itinerary" ? s.plan : null, incoming, swappedDaysRef.current),
+        generating: true,
+      }));
+    });
+
     es.addEventListener("ready", (e) => {
-      const plan = JSON.parse((e as MessageEvent).data) as TripPlan;
+      const incoming = JSON.parse((e as MessageEvent).data) as TripPlan;
       es.close();
-      setScreen({ kind: "itinerary", plan });
+      setScreen((s) => ({
+        kind: "itinerary",
+        plan: mergePlans(s.kind === "itinerary" ? s.plan : null, incoming, swappedDaysRef.current),
+        generating: false,
+      }));
     });
 
     es.addEventListener("error", (e) => {
@@ -710,7 +775,9 @@ export default function Home() {
     <>
       {screen.kind === "input" && <InputScreen onSubmit={handleSubmit} />}
       {screen.kind === "thinking" && <ThinkingScreen thoughts={screen.thoughts} />}
-      {screen.kind === "itinerary" && <ItineraryScreen plan={screen.plan} onReset={reset} />}
+      {screen.kind === "itinerary" && (
+        <ItineraryScreen plan={screen.plan} generating={screen.generating} onSwap={handleSwap} onReset={reset} />
+      )}
       {screen.kind === "error" && <ErrorScreen message={screen.message} onReset={reset} />}
     </>
   );

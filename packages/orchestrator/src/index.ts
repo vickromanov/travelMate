@@ -11,6 +11,8 @@ export { extractIntent } from "./intent.js";
 export { buildFetchPlan, resolveData } from "./planner.js";
 export { curateResearch, formatResearchForPrompt } from "./curate.js";
 export type { CuratedResearch, CuratedItem } from "./curate.js";
+export { buildTripSkeleton } from "./skeleton.js";
+export type { TripSkeleton, SkeletonDay } from "./skeleton.js";
 export { synthesizePlan } from "./synthesis.js";
 export { reflow } from "./reflow.js";
 export { validatePlanQuality, formatQualityReport } from "./quality.js";
