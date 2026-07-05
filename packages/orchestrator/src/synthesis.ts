@@ -15,6 +15,7 @@ import type {
 import { TripPlanSchema, DayPlanSchema } from "@travelmate/contracts";
 import type { LLMClient } from "@travelmate/llm";
 import { validatePlanQuality, formatQualityReport, enforceBudgetBySwaps } from "./quality.js";
+import { formatResearchForPrompt, type CuratedResearch } from "./curate.js";
 
 const SYSTEM = `You are TravelMate's synthesis engine. Generate a complete, zero-thinking travel itinerary.
 Output ONLY valid JSON — no markdown, no code fences, no comments, no explanation.
@@ -257,6 +258,7 @@ function buildBatchPrompt(
   totalDays: number,
   tripStartDate: string,
   hotelHint?: string,
+  researchBlock = "",
 ): string {
   const f = brief.facts;
   const adults = f.partyAdults ?? 2;
@@ -300,7 +302,7 @@ ${hotelLine}${budgetLine}
 
 ASSUMPTIONS ALREADY MADE (echo these in inferenceChain):
 ${assumptionsList || "  (none)"}
-
+${researchBlock}
 Generate days ${batchStart} through ${batchEnd} of the ${totalDays}-day itinerary.
 Day ${batchStart} starts on date ${addDays(tripStartDate, batchStart - 1)}.
 Output a JSON object with: "days" (array of ${batchEnd - batchStart + 1} day objects), "inferenceChain" (array).
@@ -338,7 +340,8 @@ async function synthesizeBatch(
   totalDays: number,
   tripStartDate: string,
   llm: LLMClient,
-  hotelHint?: string,
+  hotelHint: string | undefined,
+  researchBlock: string,
 ): Promise<Record<string, unknown>> {
   const expectedDays = batchEnd - batchStart + 1;
   let res;
@@ -363,7 +366,7 @@ async function synthesizeBatch(
       stage: "synthesis",
       system: SYSTEM,
       cacheableContext: SCHEMA_BLOCK,
-      user: buildBatchPrompt(brief, batchStart, batchEnd, totalDays, tripStartDate, hotelHint),
+      user: buildBatchPrompt(brief, batchStart, batchEnd, totalDays, tripStartDate, hotelHint, researchBlock),
     },
     (text) => {
       // ALWAYS log the reason on rejection — silent validation failures cost
@@ -400,13 +403,19 @@ async function synthesizeBatch(
 export async function synthesizePlan(
   brief: TripBrief,
   _data: NormalizedResult[],
+  research: CuratedResearch | null,
   llm: LLMClient,
   cb: StreamCallbacks,
   planId?: string,
 ): Promise<TripPlan> {
   const { numDays, start } = computeNumDays(brief);
+  const researchBlock = research ? formatResearchForPrompt(research) : "";
   cb.onThought(`Composing your ${numDays}-day itinerary for ${brief.facts.destination}…`);
-  cb.onThought(`Writing a ${brief.facts.partyAdults ?? 2}-person plan, budget: ${brief.facts.budgetTier}…`);
+  cb.onThought(
+    researchBlock
+      ? `Assembling the days from the researched shortlist…`
+      : `Writing a ${brief.facts.partyAdults ?? 2}-person plan, budget: ${brief.facts.budgetTier}…`,
+  );
 
   // Split into batches of DAYS_PER_BATCH to stay within model output limits
   const batches: Array<{ start: number; end: number }> = [];
@@ -423,7 +432,7 @@ export async function synthesizePlan(
     cb.onThought(`Generating days ${batch.start}–${batch.end} of ${numDays}…`);
 
     const raw = await synthesizeBatch(
-      brief, batch.start, batch.end, numDays, start, llm, hotelHint,
+      brief, batch.start, batch.end, numDays, start, llm, hotelHint, researchBlock,
     );
 
     // Extract hotel name from first batch to keep it consistent

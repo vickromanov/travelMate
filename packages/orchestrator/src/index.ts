@@ -9,6 +9,8 @@ import { runPlanPipeline, type Deps } from "./pipeline.js";
 export * from "./pipeline.js";
 export { extractIntent } from "./intent.js";
 export { buildFetchPlan, resolveData } from "./planner.js";
+export { curateResearch, formatResearchForPrompt } from "./curate.js";
+export type { CuratedResearch, CuratedItem } from "./curate.js";
 export { synthesizePlan } from "./synthesis.js";
 export { reflow } from "./reflow.js";
 export { validatePlanQuality, formatQualityReport } from "./quality.js";

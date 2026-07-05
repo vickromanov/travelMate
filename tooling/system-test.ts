@@ -23,6 +23,7 @@ import {
   extractIntent,
   buildFetchPlan,
   resolveData,
+  curateResearch,
   synthesizePlan,
   validatePlanQuality,
   formatQualityReport,
@@ -133,7 +134,8 @@ async function runPersona(persona: Persona): Promise<PersonaResult> {
     const brief = await extractIntent(persona.input, llm, cb);
     const fetchPlan = await buildFetchPlan(brief);
     const data = await resolveData(fetchPlan, undefined as never); // MVP: no fetchers yet
-    const plan: TripPlan = await synthesizePlan(brief, data, llm, cb);
+    const research = await curateResearch(brief, llm, cb);
+    const plan: TripPlan = await synthesizePlan(brief, data, research, llm, cb);
 
     const report = validatePlanQuality(plan, {
       dailyBudgetCap: brief.facts.budgetDailyCap,
