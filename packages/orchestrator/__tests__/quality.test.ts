@@ -260,21 +260,31 @@ describe("validatePlanQuality — budget cap", () => {
 });
 
 describe("validatePlanQuality — party-aware stays pricing", () => {
-  it("warns when a party of 4 gets a STAYS option without a room configuration", () => {
+  it("errors when a party of 4 gets a STAYS option without a room configuration", () => {
     const plan = goodPlan(1);
     const report = validatePlanQuality(plan, { partyAdults: 2, partyChildren: 2 });
-    expect(report.issues.some((i) => i.rule === "stays-room-config")).toBe(true);
+    const issue = report.issues.find((i) => i.rule === "stays-room-config");
+    expect(issue?.severity).toBe("error"); // error → triggers the repair pass
+    expect(report.ok).toBe(false);
   });
 
-  it("passes when the STAYS option names the room configuration", () => {
+  it("passes when the STAYS option shows the room math", () => {
     const plan = goodPlan(1);
     const stays = plan.days[0]!.blocks.find((b) => b.category === "STAYS")!;
-    for (const o of stays.options) o.description = "2× double room, breakfast included";
+    for (const o of stays.options) o.description = "2 rooms × EUR 250 = EUR 500/night, breakfast included";
     const report = validatePlanQuality(plan, { partyAdults: 2, partyChildren: 2 });
     expect(report.issues.some((i) => i.rule === "stays-room-config")).toBe(false);
   });
 
-  it("does not warn for a couple", () => {
+  it("accepts a family room as a valid configuration", () => {
+    const plan = goodPlan(1);
+    const stays = plan.days[0]!.blocks.find((b) => b.category === "STAYS")!;
+    for (const o of stays.options) o.description = "Spacious family room for 4 with two extra beds";
+    const report = validatePlanQuality(plan, { partyAdults: 2, partyChildren: 2 });
+    expect(report.issues.some((i) => i.rule === "stays-room-config")).toBe(false);
+  });
+
+  it("does not flag a couple", () => {
     const report = validatePlanQuality(goodPlan(1), { partyAdults: 2, partyChildren: 0 });
     expect(report.issues.some((i) => i.rule === "stays-room-config")).toBe(false);
   });

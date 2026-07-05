@@ -203,13 +203,15 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
       }
 
       // STAYS pricing must reflect the real party: 3+ people don't fit one
-      // double room — the option must say which room configuration it prices.
+      // double room. Error severity — the repair pass must restate the option
+      // with the room count and the multiplied total (rooms × per-room rate).
       const partySize = Math.max(1, opts.partyAdults ?? 1) + (opts.partyChildren ?? 0);
       if (b.category === "STAYS" && partySize > 2) {
         const sel = b.options.find((o) => o.id === b.selectedOptionId) ?? b.options[0];
-        if (sel && !/family room|famil|suite|apartment|2\s*(x|×)|two rooms|triple|quad|connecting|rooms for/i.test(`${sel.title} ${sel.description}`)) {
-          warn("stays-room-config", bWhere,
-            `party of ${partySize} but option "${sel.title}" does not state a room configuration — price may be for one room/person`,
+        if (sel && !/family room|famil|suite|apartment|\d\s*(x|×)\s*(double|twin|room)|two rooms|triple|quad|connecting|rooms ×|rooms for/i.test(`${sel.title} ${sel.description}`)) {
+          err("stays-room-config", bWhere,
+            `party of ${partySize} but option "${sel.title}" does not state a room configuration — ` +
+            `describe the rooms needed (e.g. "2 rooms × EUR 250 = EUR 500/night") and set price to the multiplied total`,
             day.dayNumber);
         }
       }

@@ -65,7 +65,9 @@ The "price" of an option is what the ENTIRE party actually pays for that block.
 NEVER a per-person or single-room rate. Concretely:
   - STAYS: total for ALL rooms needed for ONE night, priced for the real party.
     2 adults + 2 children do NOT fit one double room: price a family room or
-    2 rooms, and NAME the configuration in the description (e.g. "2× double room").
+    2 rooms. SHOW THE MATH in the description — e.g. "2 rooms × EUR 250 =
+    EUR 500 per night, two people per room" — and the price field MUST equal
+    that total (number of rooms × per-room rate), never the single-room rate.
   - DINING: the full meal for the whole party (4 people = 4 meals + drinks).
   - ACTIVITIES: the sum of all tickets (adult and child rates where they differ).
   - TRANSPORT: the total fare for everyone (or the full fuel/toll cost when driving).
