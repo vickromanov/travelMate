@@ -66,11 +66,14 @@ may offer alternatives, clearly framed as "if you weren't already booked".
 === PRICING — EVERY PRICE IS THE TOTAL FOR THE WHOLE PARTY ===
 The "price" of an option is what the ENTIRE party actually pays for that block.
 NEVER a per-person or single-room rate. Concretely:
-  - STAYS: total for ALL rooms needed for ONE night, priced for the real party.
+  - STAYS: total for ALL rooms needed for ONE NIGHT — never the whole stay.
     2 adults + 2 children do NOT fit one double room: price a family room or
     2 rooms. SHOW THE MATH in the description — e.g. "2 rooms × EUR 250 =
     EUR 500 per night, two people per room" — and the price field MUST equal
     that total (number of rooms × per-room rate), never the single-room rate.
+    ⚠ COMMON MISTAKE: do NOT multiply by the number of nights. A 7-night trip
+    with a EUR 300/night hotel has price 300 on EVERY day's STAYS block —
+    NOT 2100. The plan sums the days itself.
   - DINING: the full meal for the whole party (4 people = 4 meals + drinks).
   - ACTIVITIES: the sum of all tickets (adult and child rates where they differ).
   - TRANSPORT: the total fare for everyone (or the full fuel/toll cost when driving).
@@ -230,13 +233,16 @@ EVERY option must have:
         "https://www.google.com/maps/dir/?api=1&origin=EXACT+FROM+NAME+CITY&destination=EXACT+TO+NAME+CITY&travelmode=MODE"
         (MODE: walking, transit, driving or bicycling — never generic names)
 
-    ⚠ ANTI-HALLUCINATION RULE — NEVER INVENT A DOMAIN.
-    Only output an official/tickets/booking URL when you are CERTAIN that exact
-    domain exists (globally known venues: louvre.fr, oktoberfest.de, booking.com
-    pages, national museums). If you are not 100% sure, use the Google Maps link —
-    a working map link is ALWAYS better than a guessed "official website" that
-    does not resolve. (Every non-Maps link you output is verified by the system;
-    fabricated ones get replaced and waste the traveler's trust.)
+    ⚠ ANTI-HALLUCINATION RULE — NEVER INVENT A DOMAIN OR LINK A BARE HOMEPAGE.
+    Only output an official/tickets URL when you are CERTAIN that exact domain
+    exists (globally known venues: louvre.fr, oktoberfest.de, national museums).
+    NEVER link "https://www.booking.com/" or any aggregator homepage — the link
+    must land on THIS venue. For hotel bookings when you don't know the exact
+    page, use the deterministic deep link:
+    "https://www.booking.com/searchresults.html?ss=HOTEL+NAME+CITY" (linkType "BOOKING").
+    If you are not 100% sure of any URL, use the Google Maps link — a working,
+    venue-specific link ALWAYS beats a guessed one. (Every link you output is
+    verified by the system; fabricated ones get replaced.)
 
 scheduledTime must progress realistically through the day.
 Add 20-30 min buffer between morning→afternoon, afternoon→evening.

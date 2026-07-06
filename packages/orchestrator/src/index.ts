@@ -3,8 +3,8 @@
  * Database. NEVER imported by the UX (import matrix, projectStructure.md §2).
  */
 import type { CrucialInfo, PlanEdit, StreamCallbacks } from "@travelmate/contracts";
-import { NotImplemented } from "@travelmate/contracts";
 import { runPlanPipeline, type Deps } from "./pipeline.js";
+import { reflow, type ReflowResult } from "./reflow.js";
 
 export * from "./pipeline.js";
 export { extractIntent } from "./intent.js";
@@ -14,7 +14,8 @@ export type { CuratedResearch, CuratedItem } from "./curate.js";
 export { buildTripSkeleton } from "./skeleton.js";
 export type { TripSkeleton, SkeletonDay } from "./skeleton.js";
 export { synthesizePlan } from "./synthesis.js";
-export { reflow } from "./reflow.js";
+export { reflow, deriveDependents } from "./reflow.js";
+export type { ReflowResult } from "./reflow.js";
 export { validatePlanQuality, formatQualityReport } from "./quality.js";
 export type { QualityIssue, QualityReport } from "./quality.js";
 export { verifyDayLinks, mapsSearchUrl } from "./verify-links.js";
@@ -32,8 +33,9 @@ export async function orchestrate(
 
 /** Public entrypoint B: apply one edit via scoped re-flow (H4). */
 export async function orchestrateEdit(
-  _edit: PlanEdit,
-  _deps: Deps,
-): Promise<void> {
-  throw new NotImplemented("orchestrator.orchestrateEdit");
+  edit: PlanEdit,
+  deps: Deps,
+  cb?: Pick<StreamCallbacks, "onThought">,
+): Promise<ReflowResult> {
+  return reflow(edit, deps.db, deps.llm, cb);
 }

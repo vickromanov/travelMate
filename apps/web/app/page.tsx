@@ -111,6 +111,23 @@ const EXAMPLES = [
 
 function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
   const [text, setText] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  /** Template click: fill the box AND make sure the traveler SEES it land. */
+  function useTemplate(ex: string) {
+    setText(ex);
+    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    cardRef.current?.classList.remove("flash-updated");
+    // restart the flash animation even on repeated clicks
+    void cardRef.current?.offsetWidth;
+    cardRef.current?.classList.add("flash-updated");
+    const ta = textareaRef.current;
+    if (ta) {
+      ta.focus({ preventScroll: true });
+      ta.setSelectionRange(ex.length, ex.length);
+    }
+  }
 
   return (
     <div style={{ maxWidth: 760, margin: "0 auto", padding: "72px 24px" }}>
@@ -127,8 +144,9 @@ function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
         </p>
       </div>
 
-      <div className="card" style={{ padding: 8, boxShadow: "var(--shadow-lg)", animation: "fadeUp 0.5s ease 0.08s backwards" }}>
+      <div ref={cardRef} className="card" style={{ padding: 8, boxShadow: "var(--shadow-lg)", animation: "fadeUp 0.5s ease 0.08s backwards" }}>
         <textarea
+          ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Who's going, where, when, what kind of trip — tell me everything…"
@@ -161,8 +179,9 @@ function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {EXAMPLES.map((ex) => (
-            <button key={ex} className="example-chip" onClick={() => setText(ex)} style={{ padding: "11px 16px" }}>
-              {ex}
+            <button key={ex} className="example-chip" onClick={() => useTemplate(ex)} style={{ padding: "11px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <span>{ex}</span>
+              <span style={{ color: "var(--teal)", fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0, fontSize: 12.5 }}>Use ↑</span>
             </button>
           ))}
         </div>
@@ -333,7 +352,12 @@ function OptionCard({ opt, selected, onSelect }: { opt: TravelOption; selected: 
 
 // ── Timeline block ────────────────────────────────────────────────────────────
 
-function TimelineBlock({ block, isLast, onSwap }: { block: Block; isLast: boolean; onSwap: (blockId: string, optionId: string) => void }) {
+function TimelineBlock({ block, isLast, onSwap, flash = false }: {
+  block: Block;
+  isLast: boolean;
+  onSwap: (blockId: string, optionId: string) => void;
+  flash?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const selected = block.options.find((o) => o.id === block.selectedOptionId) ?? block.options[0];
   const cat = catMeta(block.category);
@@ -361,7 +385,7 @@ function TimelineBlock({ block, isLast, onSwap }: { block: Block; isLast: boolea
       </div>
 
       {/* Card */}
-      <div className="card" style={{ marginBottom: 14, overflow: "hidden" }}>
+      <div className={`card${flash ? " flash-updated" : ""}`} style={{ marginBottom: 14, overflow: "hidden" }}>
         <button
           onClick={() => setExpanded(!expanded)}
           style={{
@@ -422,7 +446,11 @@ function TimelineBlock({ block, isLast, onSwap }: { block: Block; isLast: boolea
 
 // ── Day view ──────────────────────────────────────────────────────────────────
 
-function DayView({ day, onSwap }: { day: DayPlan; onSwap: (blockId: string, optionId: string) => void }) {
+function DayView({ day, onSwap, flashIds }: {
+  day: DayPlan;
+  onSwap: (blockId: string, optionId: string) => void;
+  flashIds?: ReadonlySet<string>;
+}) {
   const dayTotal = day.blocks.reduce((sum, b) => {
     const sel = b.options.find((o) => o.id === b.selectedOptionId) ?? b.options[0];
     return sum + (sel?.price.amount ?? 0);
@@ -461,7 +489,7 @@ function DayView({ day, onSwap }: { day: DayPlan; onSwap: (blockId: string, opti
 
       <div>
         {day.blocks.map((b, i) => (
-          <TimelineBlock key={b.blockId} block={b} isLast={i === day.blocks.length - 1} onSwap={onSwap} />
+          <TimelineBlock key={b.blockId} block={b} isLast={i === day.blocks.length - 1} onSwap={onSwap} flash={flashIds?.has(b.blockId) ?? false} />
         ))}
       </div>
     </div>
@@ -470,9 +498,11 @@ function DayView({ day, onSwap }: { day: DayPlan; onSwap: (blockId: string, opti
 
 // ── Itinerary screen ──────────────────────────────────────────────────────────
 
-function ItineraryScreen({ plan, generating, onSwap, onReset }: {
+function ItineraryScreen({ plan, generating, reflowing, flashIds, onSwap, onReset }: {
   plan: TripPlan;
   generating: boolean;
+  reflowing: boolean;
+  flashIds: ReadonlySet<string>;
   onSwap: (blockId: string, optionId: string) => void;
   onReset: () => void;
 }) {
@@ -613,11 +643,23 @@ function ItineraryScreen({ plan, generating, onSwap, onReset }: {
               : "Finishing touches — validating the full itinerary…"}
           </div>
         )}
+        {!generating && reflowing && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, marginTop: 10,
+            fontSize: 13, color: "var(--ink-soft)", paddingLeft: 4,
+          }}>
+            <span style={{
+              width: 7, height: 7, borderRadius: "50%", background: "var(--teal)",
+              animation: "pulseDot 1.3s ease infinite", flexShrink: 0,
+            }} />
+            Re-flowing dependent cards — transport routes and references are being updated…
+          </div>
+        )}
       </div>
 
       {/* Active day timeline */}
       <div style={{ maxWidth: 860, margin: "0 auto", padding: "34px 24px 40px" }}>
-        {plan.days[activeDay] && <DayView day={plan.days[activeDay]!} onSwap={handleSwap} />}
+        {plan.days[activeDay] && <DayView day={plan.days[activeDay]!} onSwap={handleSwap} flashIds={flashIds} />}
       </div>
 
       {/* Export CTA — where the traveler lands after reviewing their choices */}
@@ -680,16 +722,63 @@ type Screen =
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>({ kind: "input" });
+  const [reflowing, setReflowing] = useState(false);
+  const [flashIds, setFlashIds] = useState<ReadonlySet<string>>(new Set());
   const esRef = useRef<EventSource | null>(null);
   // Days the traveler already swapped options on — incoming partial/final
   // updates must never overwrite these (their choices win over regeneration).
   const swappedDaysRef = useRef<Set<number>>(new Set());
+  // Swaps made WHILE the plan was still generating — replayed to the server
+  // once the final plan is saved, so re-flow can process their dependencies.
+  const pendingEditsRef = useRef<Array<{ blockId: string; optionId: string }>>([]);
+  // Serialize /modify calls: each edit re-flows against the previous result.
+  const editChainRef = useRef<Promise<void>>(Promise.resolve());
+  const inFlightEditsRef = useRef(0);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function reset() {
     esRef.current?.close();
     esRef.current = null;
     swappedDaysRef.current = new Set();
+    pendingEditsRef.current = [];
+    inFlightEditsRef.current = 0;
+    setReflowing(false);
+    setFlashIds(new Set());
     setScreen({ kind: "input" });
+  }
+
+  function flashChanged(ids: string[]) {
+    setFlashIds(new Set(ids));
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setFlashIds(new Set()), 3000);
+  }
+
+  /** Send one edit through the server re-flow engine (serialized). */
+  function postEdit(planId: string, blockId: string, optionId: string) {
+    inFlightEditsRef.current++;
+    setReflowing(true);
+    editChainRef.current = editChainRef.current.then(async () => {
+      try {
+        const res = await fetch(`${API}/modify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ planId, blockId, newOptionId: optionId }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { plan, changedBlockIds } = await res.json() as { plan: TripPlan; changedBlockIds: string[] };
+        inFlightEditsRef.current--;
+        // Adopt only the LAST response — intermediate ones lack queued edits
+        if (inFlightEditsRef.current === 0) {
+          setScreen((s) => (s.kind === "itinerary" ? { ...s, plan } : s));
+          flashChanged(changedBlockIds.filter((id) => id !== blockId));
+          setReflowing(false);
+        }
+      } catch (err) {
+        inFlightEditsRef.current--;
+        if (inFlightEditsRef.current === 0) setReflowing(false);
+        console.warn("Re-flow failed — keeping the local swap only:", err);
+      }
+    });
   }
 
   function handleSwap(blockId: string, optionId: string) {
@@ -697,6 +786,13 @@ export default function Home() {
       if (s.kind !== "itinerary") return s;
       const day = s.plan.days.find((d) => d.blocks.some((b) => b.blockId === blockId));
       if (day) swappedDaysRef.current.add(day.dayNumber);
+      if (s.generating) {
+        // Plan not saved yet — swap locally now, replay through re-flow later
+        pendingEditsRef.current.push({ blockId, optionId });
+      } else {
+        postEdit(s.plan.planId, blockId, optionId);
+      }
+      // Optimistic local swap either way — the UI answers instantly
       return { ...s, plan: swapOption(s.plan, blockId, optionId) };
     });
   }
@@ -757,6 +853,13 @@ export default function Home() {
         plan: mergePlans(s.kind === "itinerary" ? s.plan : null, incoming, swappedDaysRef.current),
         generating: false,
       }));
+      // Swaps made during generation now replay through the server re-flow
+      // engine so their dependent cards get updated too.
+      const pending = pendingEditsRef.current;
+      pendingEditsRef.current = [];
+      for (const edit of pending) {
+        postEdit(incoming.planId, edit.blockId, edit.optionId);
+      }
     });
 
     es.addEventListener("error", (e) => {
@@ -784,7 +887,14 @@ export default function Home() {
       {screen.kind === "input" && <InputScreen onSubmit={handleSubmit} />}
       {screen.kind === "thinking" && <ThinkingScreen thoughts={screen.thoughts} />}
       {screen.kind === "itinerary" && (
-        <ItineraryScreen plan={screen.plan} generating={screen.generating} onSwap={handleSwap} onReset={reset} />
+        <ItineraryScreen
+          plan={screen.plan}
+          generating={screen.generating}
+          reflowing={reflowing}
+          flashIds={flashIds}
+          onSwap={handleSwap}
+          onReset={reset}
+        />
       )}
       {screen.kind === "error" && <ErrorScreen message={screen.message} onReset={reset} />}
     </>

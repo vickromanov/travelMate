@@ -14,6 +14,7 @@ import { createDatabase } from "@travelmate/database";
 import { createLLMClient } from "@travelmate/llm";
 import type { Deps } from "@travelmate/orchestrator";
 import { planRoutes } from "./routes/plan.js";
+import { modifyRoutes } from "./routes/modify.js";
 
 export const db = createDatabase("memory");
 export const llm = createLLMClient();
@@ -28,6 +29,7 @@ export async function startServer(port = Number(process.env.API_PORT ?? 8080)) {
   });
 
   await app.register(planRoutes);
+  await app.register(modifyRoutes);
 
   app.get("/health", async () => ({ status: "ok" }));
 
