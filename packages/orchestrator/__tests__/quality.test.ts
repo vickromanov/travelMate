@@ -290,6 +290,35 @@ describe("validatePlanQuality — party-aware stays pricing", () => {
   });
 });
 
+describe("validatePlanQuality — nightly vs whole-stay price", () => {
+  it("errors when a STAYS price looks like the whole-stay total", () => {
+    const plan = goodPlan(7);
+    plan.totalEstimatedCost = { amount: 4200, currency: "EUR" };
+    const stays = plan.days[0]!.blocks.find((b) => b.category === "STAYS")!;
+    const sel = stays.options.find((o) => o.id === stays.selectedOptionId)!;
+    sel.price = { amount: 2200, currency: "EUR" }; // 52% of the whole trip
+    const report = validatePlanQuality(plan);
+    const issue = report.issues.find((i) => i.rule === "stays-nightly-price");
+    expect(issue?.severity).toBe("error");
+  });
+
+  it("accepts a plausible nightly rate", () => {
+    const plan = goodPlan(7);
+    plan.totalEstimatedCost = { amount: 4200, currency: "EUR" };
+    const stays = plan.days[0]!.blocks.find((b) => b.category === "STAYS")!;
+    stays.options.find((o) => o.id === stays.selectedOptionId)!.price = { amount: 300, currency: "EUR" };
+    expect(validatePlanQuality(plan).issues.some((i) => i.rule === "stays-nightly-price")).toBe(false);
+  });
+
+  it("does not apply to short trips where one night legitimately dominates", () => {
+    const plan = goodPlan(2);
+    plan.totalEstimatedCost = { amount: 1000, currency: "EUR" };
+    const stays = plan.days[0]!.blocks.find((b) => b.category === "STAYS")!;
+    stays.options.find((o) => o.id === stays.selectedOptionId)!.price = { amount: 450, currency: "EUR" };
+    expect(validatePlanQuality(plan).issues.some((i) => i.rule === "stays-nightly-price")).toBe(false);
+  });
+});
+
 describe("enforceBudgetBySwaps", () => {
   function planWithCheaperOptions(): TripPlan {
     const plan = goodPlan(1);

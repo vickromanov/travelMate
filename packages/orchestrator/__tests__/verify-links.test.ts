@@ -89,7 +89,7 @@ describe("verifyDayLinks", () => {
     expect(report.replaced).toBeGreaterThan(0);
   });
 
-  it("caches origins — one probe per domain across options and days", async () => {
+  it("caches per URL — one probe for identical links across options and days", async () => {
     let calls = 0;
     const counting: FetchLike = async () => { calls++; return { status: 200 }; };
     const d = day([opt("https://same-domain.com/a")]);
@@ -97,5 +97,42 @@ describe("verifyDayLinks", () => {
     for (const o of d.blocks[0]!.options) o.link = "https://same-domain.com/a";
     await verifyDayLinks([d], counting);
     expect(calls).toBe(1);
+  });
+
+  it("rewrites a generic booking.com homepage into a venue deep link — no probe", async () => {
+    let calls = 0;
+    const counting: FetchLike = async () => { calls++; return { status: 200 }; };
+    const d = day([opt("https://www.booking.com/")]);
+    const report = await verifyDayLinks([d], counting);
+    const fixed = d.blocks[0]!.options[0]!;
+    expect(fixed.link).toContain("booking.com/searchresults.html?ss=Grand%20Boulevards%20Hotel");
+    expect(fixed.linkType).toBe("BOOKING");
+    expect(report.replaced).toBeGreaterThan(0);
+    expect(calls).toBe(0); // constructed deep links are never probed
+  });
+
+  it("rewrites any other generic homepage into a Maps search", async () => {
+    const d = day([opt("https://www.tripadvisor.com/")]);
+    await verifyDayLinks([d], fetchOk);
+    expect(d.blocks[0]!.options[0]!.link).toContain("google.com/maps/search");
+  });
+
+  it("replaces a dead booking.com PATH with the venue's booking deep link", async () => {
+    const d = day([opt("https://www.booking.com/hotel/de/nonexistent-slug.html")]);
+    await verifyDayLinks([d], fetch404);
+    const fixed = d.blocks[0]!.options[0]!;
+    expect(fixed.link).toContain("booking.com/searchresults.html?ss=");
+    expect(fixed.linkType).toBe("BOOKING");
+  });
+
+  it("probes full URLs, not just domains — wrong paths on live domains are caught", async () => {
+    const fetchByPath: FetchLike = async (url) => ({ status: url.includes("/real") ? 200 : 404 });
+    const good = opt("https://venue-site.com/real");
+    const d = day([good]);
+    d.blocks[0]!.options[1]!.link = "https://venue-site.com/hallucinated-page";
+    const report = await verifyDayLinks([d], fetchByPath);
+    expect(report.replaced).toBe(1);
+    expect(d.blocks[0]!.options[0]!.link).toBe("https://venue-site.com/real");
+    expect(d.blocks[0]!.options[1]!.link).toContain("google.com/maps/search");
   });
 });
