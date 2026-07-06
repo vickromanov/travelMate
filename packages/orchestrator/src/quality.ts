@@ -216,6 +216,19 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
         }
       }
 
+      // STAYS price must be ONE night — a nightly rate that eats over a third
+      // of the whole multi-day trip budget is almost certainly the whole-stay
+      // total pasted onto a single day (e.g. EUR 2,200 for a EUR 4,200 week).
+      if (b.category === "STAYS" && plan.days.length >= 4 && plan.totalEstimatedCost.amount > 0) {
+        const sel = b.options.find((o) => o.id === b.selectedOptionId) ?? b.options[0];
+        if (sel && sel.price.amount > plan.totalEstimatedCost.amount * 0.35) {
+          err("stays-nightly-price", bWhere,
+            `STAYS price ${sel.price.currency} ${sel.price.amount} is ${Math.round((sel.price.amount / plan.totalEstimatedCost.amount) * 100)}% ` +
+            `of the whole ${plan.days.length}-day trip cost — this looks like the WHOLE-STAY total; price ONE night only`,
+            day.dayNumber);
+        }
+      }
+
       // TRANSPORT must tell the traveler how to actually move (H3)
       if (b.category === "TRANSPORT") {
         const anchor = b.options.find((o) => o.tier === "ANCHOR") ?? b.options[0];
