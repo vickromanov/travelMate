@@ -35,6 +35,16 @@ function fmtMoney(m: Money): string {
   return m.amount > 0 ? `${m.currency} ${m.amount.toLocaleString("en-GB")}` : "Free";
 }
 
+function linkLabel(opt: { linkType?: string }): string {
+  switch (opt.linkType) {
+    case "TICKETS": return "Buy tickets";
+    case "BOOKING": return "Reserve";
+    case "OFFICIAL": return "Website";
+    case "DIRECTIONS": return "Directions";
+    default: return "View on map";
+  }
+}
+
 function fmtDate(iso: string, opts: Intl.DateTimeFormatOptions): string {
   try {
     return new Date(iso + "T00:00:00").toLocaleDateString("en-GB", opts);
@@ -132,10 +142,10 @@ function BlockRow({ block }: { block: Block }) {
         {/* Venue line only when it adds information beyond the label */}
         {sel.title !== (block.label ?? sel.title) ? (
           sel.link
-            ? <Link src={sel.link} style={s.venue}>{sel.title}</Link>
+            ? <Link src={sel.link} style={s.venue}>{sel.title} ({linkLabel(sel)})</Link>
             : <Text style={s.venue}>{sel.title}</Text>
         ) : sel.link ? (
-          <Link src={sel.link} style={s.venue}>Open in Maps / website</Link>
+          <Link src={sel.link} style={s.venue}>{linkLabel(sel)}</Link>
         ) : null}
         {details ? <Text style={s.detail}>{details}</Text> : null}
       </View>

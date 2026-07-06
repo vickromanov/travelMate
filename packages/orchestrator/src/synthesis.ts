@@ -17,6 +17,7 @@ import type { LLMClient } from "@travelmate/llm";
 import { validatePlanQuality, formatQualityReport, enforceBudgetBySwaps } from "./quality.js";
 import { formatResearchForPrompt, type CuratedResearch } from "./curate.js";
 import { buildTripSkeleton, type TripSkeleton, type SkeletonDay } from "./skeleton.js";
+import { verifyDayLinks } from "./verify-links.js";
 
 const SYSTEM = `You are TravelMate's synthesis engine. Generate a complete, zero-thinking travel itinerary.
 Output ONLY valid JSON — no markdown, no code fences, no comments, no explanation.
@@ -214,17 +215,28 @@ EVERY option must have:
   - Realistic price for the budget tier
   - Genuine reasoning tied to THIS specific traveler's profile
   - openingHours and phoneNumber for DINING and ACTIVITIES options
-  - link: the single most useful URL for this option, chosen by category:
-      DINING    → official restaurant website (e.g. "https://restaurantname.com") if well-known,
-                  otherwise Google Maps search: "https://www.google.com/maps/search/?api=1&query=NAME+CITY"
-      ACTIVITIES → official venue/attraction website (e.g. "https://museu.gov.pt"),
-                  otherwise Google Maps: "https://www.google.com/maps/search/?api=1&query=NAME+CITY"
-      STAYS      → hotel official website or booking page
-      TRANSPORT  → Google Maps directions URL with EXACT venue names:
-                  "https://www.google.com/maps/dir/?api=1&origin=EXACT+FROM+NAME+CITY&destination=EXACT+TO+NAME+CITY&travelmode=MODE"
-                  where MODE is: walking, transit, driving, or bicycling
-                  NEVER use generic names — use the exact venue/hotel name from the preceding/following block.
-      LOGISTICS  → Google Maps search for the relevant place
+  - link + linkType: THINK about what the traveler actually needs to DO with this
+    option, then attach the single most useful link for that action:
+      * needs to BUY TICKETS (major museum/attraction/event) → the official ticket
+        page, linkType "TICKETS"
+      * needs to RESERVE (popular restaurant, hotel not yet booked) → the booking/
+        reservation page, linkType "BOOKING"
+      * needs INFO (menus, exhibitions) → the official site, linkType "OFFICIAL"
+      * needs to FIND it (cafés, parks, viewpoints, most venues) → Google Maps
+        search "https://www.google.com/maps/search/?api=1&query=NAME+CITY",
+        linkType "MAPS"
+      * needs to GET THERE (every TRANSPORT block) → Google Maps directions with
+        EXACT venue names, linkType "DIRECTIONS":
+        "https://www.google.com/maps/dir/?api=1&origin=EXACT+FROM+NAME+CITY&destination=EXACT+TO+NAME+CITY&travelmode=MODE"
+        (MODE: walking, transit, driving or bicycling — never generic names)
+
+    ⚠ ANTI-HALLUCINATION RULE — NEVER INVENT A DOMAIN.
+    Only output an official/tickets/booking URL when you are CERTAIN that exact
+    domain exists (globally known venues: louvre.fr, oktoberfest.de, booking.com
+    pages, national museums). If you are not 100% sure, use the Google Maps link —
+    a working map link is ALWAYS better than a guessed "official website" that
+    does not resolve. (Every non-Maps link you output is verified by the system;
+    fabricated ones get replaced and waste the traveler's trust.)
 
 scheduledTime must progress realistically through the day.
 Add 20-30 min buffer between morning→afternoon, afternoon→evening.
@@ -478,6 +490,13 @@ export async function synthesizePlan(
   }
   cb.onThought(formatQualityReport(report, 5));
 
+  // Final link sweep: covers the batch path and any repaired/replaced days.
+  // The origin cache makes re-checking already-verified venues free.
+  const links = await verifyDayLinks(plan.days);
+  if (links.replaced > 0) {
+    cb.onThought(`Link check: ${links.checked} verified, ${links.replaced} dead link(s) replaced with map links.`);
+  }
+
   cb.onThought(`Plan ready — ${plan.days.length} days, ${plan.days.reduce((s, d) => s + d.blocks.length, 0)} blocks.`);
 
   return plan;
@@ -571,6 +590,13 @@ async function synthesizeProgressive(
     cb.onThought(`Writing day ${sd.dayNumber} of ${numDays}${sd.title ? ` — ${sd.title}` : ""}…`);
     const prevDay = days[days.length - 1];
     const day = await synthesizeDay(brief, sd, numDays, researchBlock, prevDay, llm);
+
+    // Every link is checked BEFORE the traveler can click it (P1)
+    const links = await verifyDayLinks([day]);
+    if (links.replaced > 0) {
+      cb.onThought(`Checked ${links.checked} links on day ${sd.dayNumber} — replaced ${links.replaced} dead one(s) with verified map links.`);
+    }
+
     days.push(day);
     cb.onThought(`Day ${sd.dayNumber} ready — ${day.blocks.length} blocks. ${sd.dayNumber < numDays ? "You can start reviewing it while I write the rest." : ""}`);
     cb.onPartialPlan?.(partialPlan());
