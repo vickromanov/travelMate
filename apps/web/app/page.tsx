@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import type { Money, TravelOption, Block, DayPlan, TripPlan } from "../src/lib/plan-types";
-import { linkActionLabel } from "../src/lib/plan-types";
+import { linkActionLabel, bookingActionLabel } from "../src/lib/plan-types";
 import { mergePlans, totalDaysOf } from "../src/lib/merge-plan";
 import { downloadItineraryPdf } from "../src/pdf/export-pdf";
 
@@ -246,7 +246,7 @@ function ThinkingScreen({ thoughts }: { thoughts: string[] }) {
 
 // ── Option card ───────────────────────────────────────────────────────────────
 
-function OptionCard({ opt, selected, onSelect }: { opt: TravelOption; selected: boolean; onSelect: () => void }) {
+function OptionCard({ opt, category, selected, onSelect }: { opt: TravelOption; category: string; selected: boolean; onSelect: () => void }) {
   const [open, setOpen] = useState(false);
   const tier = TIER_META[opt.tier] ?? { label: opt.tier, color: "var(--ink-soft)", soft: "var(--bg-soft)" };
 
@@ -332,18 +332,56 @@ function OptionCard({ opt, selected, onSelect }: { opt: TravelOption; selected: 
             {opt.openingHours && <span>🕐 {opt.openingHours}</span>}
             {opt.phoneNumber && <span>📞 {opt.phoneNumber}</span>}
           </div>
-          <div style={{ display: "flex", gap: 14, marginTop: 2 }}>
-            {opt.link && (
+
+          {/* Booking & tickets — everything needed to actually secure the spot */}
+          {(opt.bookingRequired || opt.bookingUrl || opt.priceDetail || opt.bookingAdvice) && (
+            <div style={{
+              border: "1px solid var(--border)", borderRadius: 8,
+              padding: "10px 12px", background: "var(--bg-soft)",
+              display: "flex", flexDirection: "column", gap: 5,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", color: "var(--ink-soft)" }}>
+                  🎟 Booking & tickets
+                </span>
+                {opt.bookingUrl ? (
+                  <a
+                    href={opt.bookingUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      fontSize: 12.5, fontWeight: 700, color: "#fff",
+                      background: "var(--teal)", padding: "5px 14px",
+                      borderRadius: 999, whiteSpace: "nowrap", textDecoration: "none",
+                    }}
+                  >
+                    {bookingActionLabel(category)} →
+                  </a>
+                ) : opt.bookingRequired && opt.phoneNumber ? (
+                  <a href={`tel:${opt.phoneNumber.replace(/\s+/g, "")}`} style={{ fontSize: 12.5, fontWeight: 700 }}>
+                    📞 Reserve by phone
+                  </a>
+                ) : null}
+              </div>
+              {opt.priceDetail && (
+                <span style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>💶 {opt.priceDetail}</span>
+              )}
+              {opt.bookingAdvice && (
+                <span style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>ℹ️ {opt.bookingAdvice}</span>
+              )}
+              {opt.bookingRequired && !opt.bookingAdvice && (
+                <span style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>ℹ️ Advance booking required</span>
+              )}
+            </div>
+          )}
+
+          {opt.link && (
+            <div style={{ marginTop: 2 }}>
               <a href={opt.link} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600 }}>
                 {linkActionLabel(opt)} →
               </a>
-            )}
-            {opt.bookingUrl && opt.bookingUrl !== opt.link && (
-              <a href={opt.bookingUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600 }}>
-                Book now →
-              </a>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -435,7 +473,7 @@ function TimelineBlock({ block, isLast, onSwap, flash = false }: {
               {block.options.length} swappable options
             </p>
             {block.options.map((opt) => (
-              <OptionCard key={opt.id} opt={opt} selected={opt.id === block.selectedOptionId} onSelect={() => onSwap(block.blockId, opt.id)} />
+              <OptionCard key={opt.id} opt={opt} category={block.category} selected={opt.id === block.selectedOptionId} onSelect={() => onSwap(block.blockId, opt.id)} />
             ))}
           </div>
         )}

@@ -112,10 +112,15 @@ Prices are best-effort estimates unless stated by the traveler — err realistic
               "description": "What it is and why it's the best baseline fit for this trip archetype",
               "reasoning": "The default backbone — perfectly matches the primary traveler profile",
               "price": { "amount": 15, "currency": "EUR" },
+              "priceDetail": "Adults EUR 6, children EUR 3 — family total EUR 18",
               "location": { "lat": 38.7169, "lng": -9.1399, "address": "Full street address, City" },
               "openingHours": "08:00-22:00",
               "phoneNumber": "+XX XX XX XX XX",
-              "link": "https://www.venueofficialwebsite.com"
+              "link": "https://www.venueofficialwebsite.com",
+              "linkType": "OFFICIAL",
+              "bookingRequired": true,
+              "bookingUrl": "https://www.venueofficialwebsite.com/tickets",
+              "bookingAdvice": "Timed entry — book 2-3 days ahead, weekends sell out"
             },
             {
               "id": "d1_b1_o2",
@@ -232,6 +237,23 @@ EVERY option must have:
         EXACT venue names, linkType "DIRECTIONS":
         "https://www.google.com/maps/dir/?api=1&origin=EXACT+FROM+NAME+CITY&destination=EXACT+TO+NAME+CITY&travelmode=MODE"
         (MODE: walking, transit, driving or bicycling — never generic names)
+
+  - BOOKING & TICKETS — make purchasing EFFORTLESS (H3). For every option where the
+    traveler must or should book/buy in advance (museums with timed entry, tours,
+    popular restaurants, shows, thermal baths, hotels not yet booked):
+      * "bookingRequired": true
+      * "bookingUrl": the ticket/reservation page — SAME anti-hallucination rules as
+        links. When unsure of the exact page use a deterministic search deep link:
+        hotels → "https://www.booking.com/searchresults.html?ss=NAME+CITY"
+        tours/attractions → "https://www.getyourguide.com/s/?q=NAME+CITY"
+        restaurants → official site if certain, otherwise omit bookingUrl and put
+        "reserve by phone" guidance in bookingAdvice (phoneNumber is already there)
+      * "priceDetail": the per-person breakdown behind the party total —
+        "Adults EUR 15, children under 12 free"; include child rates for families
+      * "bookingAdvice": HOW to secure it — how far ahead, timed entry, skip-the-line,
+        free-cancellation notes ("Book 2-3 days ahead — weekend slots sell out")
+    Free venues that need no booking: bookingRequired false, no bookingUrl; you may
+    still set priceDetail "Free entry".
 
     ⚠ ANTI-HALLUCINATION RULE — NEVER INVENT A DOMAIN OR LINK A BARE HOMEPAGE.
     Only output an official/tickets URL when you are CERTAIN that exact domain

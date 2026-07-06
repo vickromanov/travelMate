@@ -80,6 +80,12 @@ export const TravelOptionSchema = z.object({
   durationMinutes: optNum(z.number().int().positive()),
   bookingRequired: z.boolean().nullish().transform((v) => v ?? undefined),
   bookingUrl: optStr(),
+  /** Per-person ticket/price breakdown behind the party-total `price`,
+   *  e.g. "Adults EUR 15, children under 12 free". */
+  priceDetail: optStr(),
+  /** How to actually secure the spot, e.g. "Timed entry — book 2-3 days
+   *  ahead, sells out on weekends" or "Reserve by phone a day before". */
+  bookingAdvice: optStr(),
   openingHours: optStr(),
   phoneNumber: optStr(),
   affiliationRef: optStr(),

@@ -129,6 +129,8 @@ function BlockRow({ block }: { block: Block }) {
     sel.location.address,
     sel.openingHours ? `Open ${sel.openingHours}` : undefined,
     sel.phoneNumber,
+    sel.priceDetail,
+    sel.bookingAdvice ?? (sel.bookingRequired ? "Advance booking required" : undefined),
   ].filter(Boolean).join("  ·  ");
 
   return (
@@ -148,6 +150,11 @@ function BlockRow({ block }: { block: Block }) {
           <Link src={sel.link} style={s.venue}>{linkLabel(sel)}</Link>
         ) : null}
         {details ? <Text style={s.detail}>{details}</Text> : null}
+        {sel.bookingUrl ? (
+          <Link src={sel.bookingUrl} style={s.venue}>
+            {block.category === "DINING" ? "Reserve a table" : block.category === "STAYS" ? "Book a room" : "Get tickets"}
+          </Link>
+        ) : null}
       </View>
       <Text style={s.price}>{fmtMoney(sel.price)}</Text>
     </View>

@@ -25,7 +25,9 @@ const urlCache = new Map<string, Promise<boolean>>();
 
 /** Deep links we construct ourselves — correct by construction, never probed. */
 function isSafeConstructed(url: string): boolean {
-  return isMapsLink(url) || /booking\.com\/searchresults\.html\?ss=/i.test(url);
+  return isMapsLink(url) ||
+    /booking\.com\/searchresults\.html\?ss=/i.test(url) ||
+    /getyourguide\.com\/s\/?\?q=/i.test(url);
 }
 
 function isMapsLink(url: string): boolean {

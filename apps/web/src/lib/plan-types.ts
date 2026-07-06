@@ -11,9 +11,22 @@ export interface TravelOption {
   id: string; tier: string; title: string; description: string;
   reasoning: string; price: Money; location: GeoLocation;
   openingHours?: string; phoneNumber?: string;
+  bookingRequired?: boolean;
   bookingUrl?: string; scheduledTime?: string; durationMinutes?: number;
+  priceDetail?: string;
+  bookingAdvice?: string;
   link?: string;
   linkType?: "TICKETS" | "BOOKING" | "OFFICIAL" | "MAPS" | "DIRECTIONS";
+}
+
+/** Label for the booking CTA, by category. */
+export function bookingActionLabel(category: string): string {
+  switch (category) {
+    case "DINING": return "Reserve a table";
+    case "STAYS": return "Book a room";
+    case "ACTIVITIES": return "Get tickets";
+    default: return "Book now";
+  }
 }
 
 /** Action label for an option's primary link, driven by its linkType. */
