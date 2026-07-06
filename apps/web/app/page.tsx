@@ -111,6 +111,23 @@ const EXAMPLES = [
 
 function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
   const [text, setText] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  /** Template click: fill the box AND make sure the traveler SEES it land. */
+  function useTemplate(ex: string) {
+    setText(ex);
+    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    cardRef.current?.classList.remove("flash-updated");
+    // restart the flash animation even on repeated clicks
+    void cardRef.current?.offsetWidth;
+    cardRef.current?.classList.add("flash-updated");
+    const ta = textareaRef.current;
+    if (ta) {
+      ta.focus({ preventScroll: true });
+      ta.setSelectionRange(ex.length, ex.length);
+    }
+  }
 
   return (
     <div style={{ maxWidth: 760, margin: "0 auto", padding: "72px 24px" }}>
@@ -127,8 +144,9 @@ function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
         </p>
       </div>
 
-      <div className="card" style={{ padding: 8, boxShadow: "var(--shadow-lg)", animation: "fadeUp 0.5s ease 0.08s backwards" }}>
+      <div ref={cardRef} className="card" style={{ padding: 8, boxShadow: "var(--shadow-lg)", animation: "fadeUp 0.5s ease 0.08s backwards" }}>
         <textarea
+          ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Who's going, where, when, what kind of trip — tell me everything…"
@@ -161,8 +179,9 @@ function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {EXAMPLES.map((ex) => (
-            <button key={ex} className="example-chip" onClick={() => setText(ex)} style={{ padding: "11px 16px" }}>
-              {ex}
+            <button key={ex} className="example-chip" onClick={() => useTemplate(ex)} style={{ padding: "11px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <span>{ex}</span>
+              <span style={{ color: "var(--teal)", fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0, fontSize: 12.5 }}>Use ↑</span>
             </button>
           ))}
         </div>
