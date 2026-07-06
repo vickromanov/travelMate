@@ -172,3 +172,10 @@ input, textarea {
 
 .option-row { transition: background 0.13s ease; }
 .option-row:hover { background: var(--bg-soft); }
+
+/* Cards touched by a re-flow pulse briefly so the traveler sees what changed */
+@keyframes flashUpdated {
+  0%   { box-shadow: 0 0 0 3px var(--teal); background: var(--teal-soft); }
+  100% { box-shadow: var(--shadow-sm); background: var(--surface); }
+}
+.flash-updated { animation: flashUpdated 2.8s ease; }
