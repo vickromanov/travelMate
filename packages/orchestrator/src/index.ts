@@ -17,6 +17,8 @@ export { synthesizePlan } from "./synthesis.js";
 export { reflow } from "./reflow.js";
 export { validatePlanQuality, formatQualityReport } from "./quality.js";
 export type { QualityIssue, QualityReport } from "./quality.js";
+export { verifyDayLinks, mapsSearchUrl } from "./verify-links.js";
+export type { LinkReport } from "./verify-links.js";
 
 /** Public entrypoint A: build a brand-new plan from user input. */
 export async function orchestrate(

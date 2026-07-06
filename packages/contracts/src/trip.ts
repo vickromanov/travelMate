@@ -85,6 +85,15 @@ export const TravelOptionSchema = z.object({
   affiliationRef: optStr(),
   /** Primary clickable link for the card header. Official site, Google Maps, or directions. */
   link: optStr(),
+  /**
+   * What the link IS, chosen deliberately per option: tickets to buy, a table/
+   * room to book, the official site, a map pin, or turn-by-turn directions.
+   * Lets the UX label the action ("Buy tickets" vs "View on map").
+   */
+  linkType: z
+    .enum(["TICKETS", "BOOKING", "OFFICIAL", "MAPS", "DIRECTIONS"])
+    .nullish()
+    .transform((v) => v ?? undefined),
 });
 export type TravelOption = z.infer<typeof TravelOptionSchema>;
 

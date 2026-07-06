@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import type { Money, TravelOption, Block, DayPlan, TripPlan } from "../src/lib/plan-types";
+import { linkActionLabel } from "../src/lib/plan-types";
 import { mergePlans, totalDaysOf } from "../src/lib/merge-plan";
 import { downloadItineraryPdf } from "../src/pdf/export-pdf";
 
@@ -312,11 +313,18 @@ function OptionCard({ opt, selected, onSelect }: { opt: TravelOption; selected: 
             {opt.openingHours && <span>🕐 {opt.openingHours}</span>}
             {opt.phoneNumber && <span>📞 {opt.phoneNumber}</span>}
           </div>
-          {opt.bookingUrl && (
-            <a href={opt.bookingUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600 }}>
-              Book now →
-            </a>
-          )}
+          <div style={{ display: "flex", gap: 14, marginTop: 2 }}>
+            {opt.link && (
+              <a href={opt.link} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600 }}>
+                {linkActionLabel(opt)} →
+              </a>
+            )}
+            {opt.bookingUrl && opt.bookingUrl !== opt.link && (
+              <a href={opt.bookingUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600 }}>
+                Book now →
+              </a>
+            )}
+          </div>
         </div>
       )}
     </div>

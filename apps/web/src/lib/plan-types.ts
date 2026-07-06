@@ -13,6 +13,18 @@ export interface TravelOption {
   openingHours?: string; phoneNumber?: string;
   bookingUrl?: string; scheduledTime?: string; durationMinutes?: number;
   link?: string;
+  linkType?: "TICKETS" | "BOOKING" | "OFFICIAL" | "MAPS" | "DIRECTIONS";
+}
+
+/** Action label for an option's primary link, driven by its linkType. */
+export function linkActionLabel(opt: TravelOption): string {
+  switch (opt.linkType) {
+    case "TICKETS": return "🎟 Buy tickets";
+    case "BOOKING": return "🛏 Reserve";
+    case "OFFICIAL": return "🌐 Website";
+    case "DIRECTIONS": return "🧭 Directions";
+    default: return "📍 View on map";
+  }
 }
 
 export interface Block {
