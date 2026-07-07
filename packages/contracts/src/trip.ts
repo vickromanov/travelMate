@@ -80,6 +80,20 @@ export const TravelOptionSchema = z.object({
   affiliationRef: optStr(),
   /** Primary clickable link for the card header. Official site, Google Maps, or directions. */
   link: optStr(),
+  /**
+   * What the link IS: tickets to buy, a table/room to book, the official site,
+   * a map pin, or turn-by-turn directions.
+   */
+  linkType: z
+    .enum(["TICKETS", "BOOKING", "OFFICIAL", "MAPS", "DIRECTIONS"])
+    .nullish()
+    .transform((v) => v ?? undefined),
+  /** Per-person ticket/price breakdown behind the party-total `price`. */
+  priceDetail: optStr(),
+  /** How to actually secure the spot. */
+  bookingAdvice: optStr(),
+  /** How the traveler PHYSICALLY reaches this venue and what it truly costs beyond the entrance ticket. */
+  accessNotes: optStr(),
 });
 export type TravelOption = z.infer<typeof TravelOptionSchema>;
 
