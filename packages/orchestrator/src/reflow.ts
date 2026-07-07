@@ -26,6 +26,7 @@ import { ItineraryBlockSchema } from "@travelmate/contracts";
 import type { Database } from "@travelmate/database";
 import type { LLMClient } from "@travelmate/llm";
 import { verifyDayLinks, mapsSearchUrl } from "./verify-links.js";
+import { enforceConsistency } from "./consistency.js";
 
 export interface ReflowResult {
   plan: TripPlan;
@@ -283,8 +284,9 @@ export async function reflow(
     }
   }
 
-  // Every touched link is re-verified before the traveler can click it
+  // Re-reconcile booking/access/mode on touched days, then re-verify links
   const touchedDays = plan.days.filter((d) => d.blocks.some((b) => changed.has(b.blockId)));
+  enforceConsistency({ ...plan, days: touchedDays });
   await verifyDayLinks(touchedDays);
 
   // Guard: the swapped option's own link must exist for dependents to point at

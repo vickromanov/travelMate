@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import type { Money, TravelOption, Block, DayPlan, TripPlan } from "../src/lib/plan-types";
-import { linkActionLabel, bookingActionLabel } from "../src/lib/plan-types";
+import { linkActionLabel, bookingActionLabel, isFreeWalkIn } from "../src/lib/plan-types";
 import { mergePlans, totalDaysOf } from "../src/lib/merge-plan";
 import { downloadItineraryPdf } from "../src/pdf/export-pdf";
 
@@ -384,8 +384,9 @@ function OptionCard({ opt, category, selected, onSelect }: { opt: TravelOption; 
                 )}
               </div>
 
-              {/* The explicit how-to-book line — never leave the traveler guessing */}
-              {!opt.bookingUrl && opt.bookingRequired && opt.phoneNumber && (
+              {/* The explicit how-to-book line — never leave the traveler
+                  guessing, and never claim "walk in" for a priced/gated option. */}
+              {!opt.bookingUrl && (opt.bookingRequired || opt.price.amount > 0) && opt.phoneNumber && (
                 <span style={{ fontSize: 12.5, color: "var(--ink)", fontWeight: 600 }}>
                   📞 Booking required — call{" "}
                   <a href={`tel:${opt.phoneNumber.replace(/[\s/-]+/g, "")}`} style={{ fontWeight: 700 }}>
@@ -393,14 +394,14 @@ function OptionCard({ opt, category, selected, onSelect }: { opt: TravelOption; 
                   </a>
                 </span>
               )}
-              {!opt.bookingUrl && opt.bookingRequired && !opt.phoneNumber && (
+              {!opt.bookingUrl && (opt.bookingRequired || opt.price.amount > 0) && !opt.phoneNumber && (
                 <span style={{ fontSize: 12.5, color: "var(--ink)", fontWeight: 600 }}>
-                  ⚠️ Advance booking required — check on site
+                  🎟 Ticket required — buy on site or via the link above
                 </span>
               )}
-              {!opt.bookingUrl && !opt.bookingRequired && (
+              {isFreeWalkIn(opt) && (
                 <span style={{ fontSize: 12.5, color: "var(--cat-activities)", fontWeight: 600 }}>
-                  ✓ No booking or tickets needed — just walk in
+                  ✓ Free — no booking or tickets needed, just walk in
                 </span>
               )}
 

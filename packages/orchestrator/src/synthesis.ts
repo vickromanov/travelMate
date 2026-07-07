@@ -18,6 +18,16 @@ import { validatePlanQuality, formatQualityReport, enforceBudgetBySwaps } from "
 import { formatResearchForPrompt, type CuratedResearch } from "./curate.js";
 import { buildTripSkeleton, type TripSkeleton, type SkeletonDay } from "./skeleton.js";
 import { verifyDayLinks } from "./verify-links.js";
+import { enforceConsistency } from "./consistency.js";
+
+/** Minimal TripPlan shell so enforceConsistency can run on a single day. */
+function emptyPlanShell(): TripPlan {
+  return {
+    planId: "", title: "", description: "",
+    totalEstimatedCost: { amount: 0, currency: "EUR" },
+    duration: "", days: [], inferenceChain: [],
+  };
+}
 
 const SYSTEM = `You are TravelMate's synthesis engine. Generate a complete, zero-thinking travel itinerary.
 Output ONLY valid JSON — no markdown, no code fences, no comments, no explanation.
@@ -532,6 +542,13 @@ export async function synthesizePlan(
   // Post-process: sort blocks within each day by scheduledTime
   sortBlocks(plan);
 
+  // Cross-field consistency (H3): derive booking/access/mode from facts so a
+  // priced ticket can never read "just walk in", etc. Deterministic, no LLM.
+  const cons = enforceConsistency(plan);
+  if (cons.fixed > 0) {
+    cb.onThought(`Reconciled ${cons.fixed} booking/access field(s) so every card is internally consistent.`);
+  }
+
   // Quality gate (H3): deterministic checks + ONE scoped repair round on errors
   const qualityOpts = {
     dailyBudgetCap: brief.facts.budgetDailyCap,
@@ -659,6 +676,9 @@ async function synthesizeProgressive(
     cb.onThought(`Writing day ${sd.dayNumber} of ${numDays}${sd.title ? ` — ${sd.title}` : ""}…`);
     const prevDay = days[days.length - 1];
     const day = await synthesizeDay(brief, sd, numDays, researchBlock, prevDay, llm);
+
+    // Reconcile booking/access/mode contradictions BEFORE the day streams (H3)
+    enforceConsistency({ ...emptyPlanShell(), days: [day] });
 
     // Every link is checked BEFORE the traveler can click it (P1)
     const links = await verifyDayLinks([day]);

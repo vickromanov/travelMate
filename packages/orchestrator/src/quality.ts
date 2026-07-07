@@ -237,6 +237,22 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
         }
       }
 
+      // CROSS-FIELD CONSISTENCY (H3). A priced ticket, or an option gated
+      // behind paid transport, can NEVER be "no booking / walk-in". Caught here
+      // as a safety net if enforceConsistency somehow missed it → repair pass.
+      {
+        const paidAccessRe = /\b(cable ?car|cogwheel|funicular|gondola|ferry|seilbahn|zahnradbahn|included in the [^.]*\b(ticket|fee|combo|fare|pass)|round-?trip)\b/i;
+        for (const o of b.options) {
+          const gatedByPaidAccess = paidAccessRe.test(`${o.description} ${o.reasoning} ${o.accessNotes ?? ""}`);
+          const ticketed = (b.category === "ACTIVITIES" && o.price.amount > 0) || gatedByPaidAccess;
+          if (ticketed && !o.bookingRequired && !o.bookingUrl) {
+            err("booking-consistency", bWhere,
+              `option "${o.title}" costs ${o.price.currency} ${o.price.amount}${gatedByPaidAccess ? " and needs paid transport to reach" : ""} but has no booking — a ticketed option can never be "walk-in"; set bookingRequired and a bookingUrl`,
+              day.dayNumber);
+          }
+        }
+      }
+
       // ACCESS TRANSPARENCY (H3, zero-thinking). An ACTIVITIES option whose
       // venue name signals remote/paid access — "summit", "peak", "cable
       // car", "ferry to X" — cannot silently claim "Free" without saying HOW

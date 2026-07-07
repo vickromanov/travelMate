@@ -41,6 +41,13 @@ function block(
       o.link = `https://www.google.com/maps/dir/?api=1&origin=Hotel+Platzl&destination=${encodeURIComponent(anchorTitle)}&travelmode=transit`;
     }
   }
+  // Priced activities/stays are bookable (post-consistency state) so the good
+  // fixture doesn't trip the cross-field booking-consistency rule.
+  if (category === "ACTIVITIES" || category === "STAYS") {
+    for (const o of options) {
+      if (o.price.amount > 0) { o.bookingRequired = true; o.bookingUrl = "https://www.getyourguide.com/s/?q=venue"; }
+    }
+  }
   return {
     blockId,
     category,
