@@ -15,6 +15,7 @@ import type {
 import { TripPlanSchema, DayPlanSchema } from "@travelmate/contracts";
 import type { LLMClient } from "@travelmate/llm";
 import { validatePlanQuality, formatQualityReport, enforceBudgetBySwaps } from "./quality.js";
+import type { CuratedResearch } from "./curate.js";
 
 const SYSTEM = `You are TravelMate's synthesis engine. Generate a complete, zero-thinking travel itinerary.
 Output ONLY valid JSON — no markdown, no code fences, no comments, no explanation.
@@ -115,7 +116,7 @@ Every day has exactly 3 blocks in this order:
 - Output ONLY valid JSON, nothing else
 `;
 
-function computeNumDays(brief: TripBrief): { numDays: number; start: string } {
+export function computeNumDays(brief: TripBrief): { numDays: number; start: string } {
   const f = brief.facts;
   // No date at all → 30 days from today (never a hardcoded date)
   const start = f.startDate ?? addDays(new Date().toISOString().slice(0, 10), 30);
@@ -250,6 +251,7 @@ async function synthesizeBatch(
 export async function synthesizePlan(
   brief: TripBrief,
   _data: NormalizedResult[],
+  _research: CuratedResearch | null,
   llm: LLMClient,
   cb: StreamCallbacks,
   planId?: string,
