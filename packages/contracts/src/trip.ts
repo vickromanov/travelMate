@@ -80,6 +80,21 @@ export const TravelOptionSchema = z.object({
   durationMinutes: optNum(z.number().int().positive()),
   bookingRequired: z.boolean().nullish().transform((v) => v ?? undefined),
   bookingUrl: optStr(),
+  /** Per-person ticket/price breakdown behind the party-total `price`,
+   *  e.g. "Adults EUR 15, children under 12 free". */
+  priceDetail: optStr(),
+  /** How to actually secure the spot, e.g. "Timed entry — book 2-3 days
+   *  ahead, sells out on weekends" or "Reserve by phone a day before". */
+  bookingAdvice: optStr(),
+  /**
+   * How the traveler PHYSICALLY reaches this venue and what it truly costs
+   * beyond the entrance ticket — e.g. "Reachable only via Zugspitze Cogwheel
+   * Train, ~EUR 70/person round trip, included in your Cable Car option
+   * above". If this venue is walk-in from the previous block, this is
+   * "Walk-in / accessible on foot from previous stop". Cross-cutting field
+   * used to KILL zero-thinking gaps (H3).
+   */
+  accessNotes: optStr(),
   openingHours: optStr(),
   phoneNumber: optStr(),
   affiliationRef: optStr(),

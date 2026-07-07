@@ -20,6 +20,8 @@ export { validatePlanQuality, formatQualityReport } from "./quality.js";
 export type { QualityIssue, QualityReport } from "./quality.js";
 export { verifyDayLinks, mapsSearchUrl } from "./verify-links.js";
 export type { LinkReport } from "./verify-links.js";
+export { enforceConsistency, isFreeWalkIn } from "./consistency.js";
+export type { ConsistencyReport } from "./consistency.js";
 
 /** Public entrypoint A: build a brand-new plan from user input. */
 export async function orchestrate(

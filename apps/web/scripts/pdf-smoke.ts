@@ -61,7 +61,15 @@ const plan: TripPlan = {
       block(`d${n}_b1`, "STAYS", "07:00", "Home Lisbon Hostel", 22),
       block(`d${n}_b2`, "DINING", "08:00", "Breakfast at Fábrica Coffee", 6),
       block(`d${n}_b3`, "TRANSPORT", "09:15", "Tram 28 to Alfama", 3),
-      block(`d${n}_b4`, "ACTIVITIES", "10:00", n === 1 ? "São Jorge Castle" : "Surf lesson", 10),
+      (() => {
+        const b = block(`d${n}_b4`, "ACTIVITIES", "10:00", n === 1 ? "São Jorge Castle" : "Surf lesson", 10);
+        const sel = b.options.find((o) => o.id === b.selectedOptionId)!;
+        sel.bookingRequired = true;
+        sel.bookingUrl = "https://www.getyourguide.com/s/?q=Sao+Jorge+Castle+Lisbon";
+        sel.priceDetail = "Adults EUR 10, under 12 free";
+        sel.bookingAdvice = "Timed entry — book a day ahead";
+        return b;
+      })(),
       block(`d${n}_b5`, "DINING", "13:00", "Lunch at Time Out Market", 9),
       block(`d${n}_b6`, "ACTIVITIES", "15:00", n === 1 ? "Miradouro walk" : "Beach afternoon", 0),
       block(`d${n}_b7`, "TRANSPORT", "18:30", "Train back to Cais do Sodré", 2),

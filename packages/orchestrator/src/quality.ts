@@ -236,6 +236,53 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
           warn("transport-directions-link", bWhere, "ANCHOR transport option link is not a maps/directions URL", day.dayNumber);
         }
       }
+
+      // CROSS-FIELD CONSISTENCY (H3). A priced ticket, or an option gated
+      // behind paid transport, can NEVER be "no booking / walk-in". Caught here
+      // as a safety net if enforceConsistency somehow missed it → repair pass.
+      {
+        const paidAccessRe = /\b(cable ?car|cogwheel|funicular|gondola|ferry|seilbahn|zahnradbahn|included in the [^.]*\b(ticket|fee|combo|fare|pass)|round-?trip)\b/i;
+        for (const o of b.options) {
+          const gatedByPaidAccess = paidAccessRe.test(`${o.description} ${o.reasoning} ${o.accessNotes ?? ""}`);
+          const ticketed = (b.category === "ACTIVITIES" && o.price.amount > 0) || gatedByPaidAccess;
+          if (ticketed && !o.bookingRequired && !o.bookingUrl) {
+            err("booking-consistency", bWhere,
+              `option "${o.title}" costs ${o.price.currency} ${o.price.amount}${gatedByPaidAccess ? " and needs paid transport to reach" : ""} but has no booking — a ticketed option can never be "walk-in"; set bookingRequired and a bookingUrl`,
+              day.dayNumber);
+          }
+        }
+      }
+
+      // ACCESS TRANSPARENCY (H3, zero-thinking). An ACTIVITIES option whose
+      // venue name signals remote/paid access — "summit", "peak", "cable
+      // car", "ferry to X" — cannot silently claim "Free" without saying HOW
+      // the traveler gets there. Either accessNotes explains the paid
+      // access, or the price reflects it, or the description does.
+      if (b.category === "ACTIVITIES") {
+        for (const o of b.options) {
+          const remoteLike = /\b(summit|peak|glacier|top station|cable ?car|gondola|funicular|ferry|island(?!$)|monastery|abbey|shrine|castle|fjord|crater|volcano)\b/i;
+          const looksRemote = remoteLike.test(o.title);
+          const looksFree = o.price.amount === 0;
+          // Narrow signals that the option ACTUALLY explains how they get
+          // there, not just any word that happens to appear in prose.
+          const explainsAccess =
+            /\b(cable ?car|gondola|funicular|cogwheel|ferry|shuttle|tramway|round-?trip|included|reach(?:able)? (?:via|by|through|only)|access(?:ible)? (?:via|by|through|from)|on foot|walk-in|walk in|hike (?:up|to)|by (?:car|taxi|tram|bus|metro|train))\b/i;
+          const evidenceOfAccess = !!(
+            (o.accessNotes && o.accessNotes.length > 8) ||
+            explainsAccess.test(o.description) ||
+            explainsAccess.test(o.reasoning)
+          );
+          if (looksRemote && looksFree && !evidenceOfAccess) {
+            err("access-cost-transparency", bWhere,
+              `option "${o.title}" is marked Free but its location typically requires paid access — set accessNotes explaining how the traveler reaches it, and include access cost in price if not already paid in a sibling option`,
+              day.dayNumber);
+          } else if (looksRemote && !evidenceOfAccess) {
+            warn("access-cost-transparency", bWhere,
+              `option "${o.title}" looks remote — please state how the traveler reaches it (accessNotes)`,
+              day.dayNumber);
+          }
+        }
+      }
     }
 
     // Hotel consistency across the trip (warning — city moves are legitimate)
