@@ -15,6 +15,7 @@ export interface TravelOption {
   bookingUrl?: string; scheduledTime?: string; durationMinutes?: number;
   priceDetail?: string;
   bookingAdvice?: string;
+  accessNotes?: string;
   link?: string;
   linkType?: "TICKETS" | "BOOKING" | "OFFICIAL" | "MAPS" | "DIRECTIONS";
 }

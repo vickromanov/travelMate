@@ -130,6 +130,7 @@ function BlockRow({ block }: { block: Block }) {
     sel.openingHours ? `Open ${sel.openingHours}` : undefined,
     sel.phoneNumber,
     sel.priceDetail,
+    sel.accessNotes ? `Getting there: ${sel.accessNotes}` : undefined,
     sel.bookingAdvice ?? (sel.bookingRequired ? "Advance booking required" : undefined),
   ].filter(Boolean).join("  ·  ");
 

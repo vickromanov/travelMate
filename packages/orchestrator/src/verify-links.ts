@@ -72,6 +72,53 @@ function isBookingHost(url: string): boolean {
   }
 }
 
+/** Distinctive slugs from a venue title: words ≥4 chars, lower-cased, ASCII-folded. */
+function venueSlugs(title: string): string[] {
+  const generic = new Set([
+    "hotel", "restaurant", "cafe", "café", "museum", "park", "palace",
+    "bar", "pub", "the", "and", "der", "die", "das", "for", "von",
+    "san", "santa", "st", "saint", "san", "grand", "royal", "old", "new",
+    "central", "national", "state", "haus", "house", "platz", "tour", "square",
+    "cable", "car", "train", "cogwheel", "summit", "walk", "guide", "private",
+  ]);
+  return title
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/ß/g, "ss")
+    .replace(/[^\w\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= 4 && !generic.has(w));
+}
+
+/**
+ * A generic-parent-domain trap: the link is alive but points to a REGION /
+ * PARENT site rather than the specific venue. Example: "Gipfelalm Zugspitze"
+ * restaurant linking to zugspitze.de (the whole mountain's tourism site).
+ *
+ * Rule: THE MOST DISTINCTIVE slug from the venue name (the FIRST non-generic
+ * word — usually the venue's own name, not the location qualifier) must
+ * appear in the URL. "Gipfelalm Zugspitze" → "gipfelalm" must be present;
+ * a link that only carries "zugspitze" points at the mountain, not the
+ * restaurant.
+ */
+function looksVenueSpecific(url: string, title: string): boolean {
+  try {
+    const u = new URL(url);
+    const haystack = `${u.hostname} ${decodeURIComponent(u.pathname)} ${decodeURIComponent(u.search)}`
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[̀-ͯ]/g, "");
+    const slugs = venueSlugs(title);
+    if (slugs.length === 0) return true; // nothing distinctive to check
+    // Cheap check for a plausible venue-specific URL: the first (most
+    // distinctive) slug is present anywhere in host+path.
+    return haystack.includes(slugs[0]!);
+  } catch {
+    return true; // malformed URLs handled elsewhere
+  }
+}
+
 /**
  * A URL is "alive" when its origin answers ANYTHING but a hard not-found.
  * DNS failures, timeouts and 404/410 kill it; 403/405/429 (bot walls) pass —
@@ -125,13 +172,23 @@ export async function verifyDayLinks(
 ): Promise<LinkReport> {
   let replaced = 0;
 
-  // Pass 1 — generic homepages are rewritten deterministically, no probe needed:
-  // a venue-specific deep link is always more useful than a working homepage.
+  // Pass 1 — deterministic rewrites, no probe needed:
+  //   (a) aggregator homepages → venue deep link
+  //   (b) generic-parent-domain traps (Gipfelalm Zugspitze → zugspitze.de) →
+  //       the map, which is always venue-specific
+  // A venue-specific deep link is always more useful than a technically-alive
+  // parent-region site.
   for (const day of days) {
     for (const block of day.blocks) {
       for (const opt of block.options) {
-        if (opt.link && !isMapsLink(opt.link) && isUselessAggregatorHomepage(opt.link)) {
-          if (isBookingHost(opt.link)) {
+        // The map / directions we generate ourselves are correct by
+        // construction — nothing to rewrite here.
+        const linkNeedsRewrite =
+          opt.link &&
+          !isMapsLink(opt.link) &&
+          (isUselessAggregatorHomepage(opt.link) || !looksVenueSpecific(opt.link, opt.title));
+        if (linkNeedsRewrite) {
+          if (opt.link && isBookingHost(opt.link)) {
             opt.link = bookingSearchUrl(opt);
             opt.linkType = "BOOKING";
           } else {
@@ -140,8 +197,12 @@ export async function verifyDayLinks(
           }
           replaced++;
         }
-        if (opt.bookingUrl && isUselessAggregatorHomepage(opt.bookingUrl)) {
-          // A homepage "booking" link books nothing — deep-link it or drop it
+        const bookingNeedsRewrite =
+          opt.bookingUrl &&
+          (isUselessAggregatorHomepage(opt.bookingUrl) ||
+            (!isSafeConstructed(opt.bookingUrl) && !looksVenueSpecific(opt.bookingUrl, opt.title)));
+        if (bookingNeedsRewrite && opt.bookingUrl) {
+          // Rewrite to a venue-specific booking search when possible; drop otherwise.
           opt.bookingUrl = isBookingHost(opt.bookingUrl) ? bookingSearchUrl(opt) : undefined;
           replaced++;
         }

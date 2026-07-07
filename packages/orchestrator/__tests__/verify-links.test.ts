@@ -56,7 +56,7 @@ describe("verifyDayLinks", () => {
   });
 
   it("keeps a live link untouched", async () => {
-    const url = "https://www.louvre.fr/en/visit";
+    const url = "https://grand-boulevards-hotel.com/en/rooms";
     const d = day([opt(url)]);
     const report = await verifyDayLinks([d], fetchOk);
     expect(report.replaced).toBe(0);
@@ -64,7 +64,7 @@ describe("verifyDayLinks", () => {
   });
 
   it("treats bot walls (403) as alive — the domain exists", async () => {
-    const d = day([opt("https://www.some-hotel.com")]);
+    const d = day([opt("https://boulevards-hotel-paris.com/")]);
     const report = await verifyDayLinks([d], fetchBotWall);
     expect(report.replaced).toBe(0);
   });
@@ -92,9 +92,10 @@ describe("verifyDayLinks", () => {
   it("caches per URL — one probe for identical links across options and days", async () => {
     let calls = 0;
     const counting: FetchLike = async () => { calls++; return { status: 200 }; };
-    const d = day([opt("https://same-domain.com/a")]);
-    // all 4 options share the same link
-    for (const o of d.blocks[0]!.options) o.link = "https://same-domain.com/a";
+    // URL contains the venue's distinctive slug so it isn't rewritten before probe
+    const url = "https://boulevards-guide.com/rooms";
+    const d = day([opt(url)]);
+    for (const o of d.blocks[0]!.options) o.link = url;
     await verifyDayLinks([d], counting);
     expect(calls).toBe(1);
   });
@@ -126,13 +127,43 @@ describe("verifyDayLinks", () => {
   });
 
   it("probes full URLs, not just domains — wrong paths on live domains are caught", async () => {
-    const fetchByPath: FetchLike = async (url) => ({ status: url.includes("/real") ? 200 : 404 });
-    const good = opt("https://venue-site.com/real");
+    const fetchByPath: FetchLike = async (url) => ({ status: url.includes("/boulevards-real") ? 200 : 404 });
+    const good = opt("https://boulevards-site.com/boulevards-real");
     const d = day([good]);
-    d.blocks[0]!.options[1]!.link = "https://venue-site.com/hallucinated-page";
+    d.blocks[0]!.options[1]!.link = "https://boulevards-site.com/boulevards-hallucinated";
     const report = await verifyDayLinks([d], fetchByPath);
     expect(report.replaced).toBe(1);
-    expect(d.blocks[0]!.options[0]!.link).toBe("https://venue-site.com/real");
+    expect(d.blocks[0]!.options[0]!.link).toBe("https://boulevards-site.com/boulevards-real");
     expect(d.blocks[0]!.options[1]!.link).toContain("google.com/maps/search");
+  });
+
+  it("rewrites a generic-parent-domain link into a Maps search (Gipfelalm -> zugspitze.de)", async () => {
+    const gip: TravelOption = {
+      id: "o1", tier: "ANCHOR", title: "Gipfelalm Zugspitze",
+      description: "d", reasoning: "r",
+      price: { amount: 30, currency: "EUR" },
+      location: { lat: 47.42, lng: 10.98, address: "Zugspitze, Grainau" },
+      link: "https://zugspitze.de/",
+    };
+    const d = day([gip]);
+    await verifyDayLinks([d], fetchOk);
+    const fixed = d.blocks[0]!.options[0]!;
+    expect(fixed.link).toContain("google.com/maps/search");
+    expect(decodeURIComponent(fixed.link!)).toContain("Gipfelalm Zugspitze");
+    expect(fixed.linkType).toBe("MAPS");
+  });
+
+  it("keeps a link whose URL host or path contains the distinctive slug", async () => {
+    // "gipfelalm" slug present in path — link is venue-specific
+    const gip: TravelOption = {
+      id: "o1", tier: "ANCHOR", title: "Gipfelalm Zugspitze",
+      description: "d", reasoning: "r",
+      price: { amount: 30, currency: "EUR" },
+      location: { lat: 47.42, lng: 10.98, address: "Zugspitze, Grainau" },
+      link: "https://zugspitze.de/en/culinary/gipfelalm",
+    };
+    const d = day([gip]);
+    await verifyDayLinks([d], fetchOk);
+    expect(d.blocks[0]!.options[0]!.link).toBe("https://zugspitze.de/en/culinary/gipfelalm");
   });
 });

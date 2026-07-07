@@ -234,7 +234,8 @@ function ThinkingScreen({ thoughts }: { thoughts: string[] }) {
               <span style={{ color: latest ? "var(--accent)" : "var(--border-strong)", flexShrink: 0 }}>
                 {latest ? "●" : "✓"}
               </span>
-              {t}
+              {/* long tokens (URLs, ids) must wrap inside the card, never overflow */}
+              <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{t}</span>
             </div>
           );
         })}
@@ -333,18 +334,41 @@ function OptionCard({ opt, category, selected, onSelect }: { opt: TravelOption; 
             {opt.phoneNumber && <span>📞 {opt.phoneNumber}</span>}
           </div>
 
-          {/* Booking & tickets — everything needed to actually secure the spot */}
-          {(opt.bookingRequired || opt.bookingUrl || opt.priceDetail || opt.bookingAdvice) && (
+          {/* Getting there — access transparency (H3). Always visible for
+              activities and remote/logistical categories, even when the answer
+              is "walk-in" — the traveler must never have to wonder. */}
+          {(opt.accessNotes ||
+            category === "ACTIVITIES" ||
+            category === "LOGISTICS") && (
+            <div style={{
+              display: "flex", gap: 8, alignItems: "flex-start",
+              fontSize: 12.5, color: "var(--ink)",
+              background: "var(--cat-transport-soft)",
+              border: "1px solid var(--cat-transport-soft)",
+              borderRadius: 8, padding: "8px 12px",
+            }}>
+              <span style={{ flexShrink: 0 }}>🚶</span>
+              <span style={{ minWidth: 0 }}>
+                <strong style={{ color: "var(--cat-transport)" }}>Getting there:&nbsp;</strong>
+                {opt.accessNotes || "Walk-in — accessible on foot from your previous stop."}
+              </span>
+            </div>
+          )}
+
+          {/* Booking & tickets — for every bookable category the traveler gets an
+              EXPLICIT answer: a link, a phone number, or "no booking needed". */}
+          {(["DINING", "ACTIVITIES", "STAYS", "LOGISTICS"].includes(category) ||
+            opt.bookingRequired || opt.bookingUrl || opt.priceDetail || opt.bookingAdvice) && (
             <div style={{
               border: "1px solid var(--border)", borderRadius: 8,
               padding: "10px 12px", background: "var(--bg-soft)",
-              display: "flex", flexDirection: "column", gap: 5,
+              display: "flex", flexDirection: "column", gap: 6,
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", color: "var(--ink-soft)" }}>
                   🎟 Booking & tickets
                 </span>
-                {opt.bookingUrl ? (
+                {opt.bookingUrl && (
                   <a
                     href={opt.bookingUrl}
                     target="_blank"
@@ -357,20 +381,34 @@ function OptionCard({ opt, category, selected, onSelect }: { opt: TravelOption; 
                   >
                     {bookingActionLabel(category)} →
                   </a>
-                ) : opt.bookingRequired && opt.phoneNumber ? (
-                  <a href={`tel:${opt.phoneNumber.replace(/\s+/g, "")}`} style={{ fontSize: 12.5, fontWeight: 700 }}>
-                    📞 Reserve by phone
-                  </a>
-                ) : null}
+                )}
               </div>
+
+              {/* The explicit how-to-book line — never leave the traveler guessing */}
+              {!opt.bookingUrl && opt.bookingRequired && opt.phoneNumber && (
+                <span style={{ fontSize: 12.5, color: "var(--ink)", fontWeight: 600 }}>
+                  📞 Booking required — call{" "}
+                  <a href={`tel:${opt.phoneNumber.replace(/[\s/-]+/g, "")}`} style={{ fontWeight: 700 }}>
+                    {opt.phoneNumber}
+                  </a>
+                </span>
+              )}
+              {!opt.bookingUrl && opt.bookingRequired && !opt.phoneNumber && (
+                <span style={{ fontSize: 12.5, color: "var(--ink)", fontWeight: 600 }}>
+                  ⚠️ Advance booking required — check on site
+                </span>
+              )}
+              {!opt.bookingUrl && !opt.bookingRequired && (
+                <span style={{ fontSize: 12.5, color: "var(--cat-activities)", fontWeight: 600 }}>
+                  ✓ No booking or tickets needed — just walk in
+                </span>
+              )}
+
               {opt.priceDetail && (
                 <span style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>💶 {opt.priceDetail}</span>
               )}
               {opt.bookingAdvice && (
                 <span style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>ℹ️ {opt.bookingAdvice}</span>
-              )}
-              {opt.bookingRequired && !opt.bookingAdvice && (
-                <span style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>ℹ️ Advance booking required</span>
               )}
             </div>
           )}

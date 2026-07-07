@@ -96,15 +96,31 @@ If NO event/festival/seasonal occasion is referenced, return ONLY:
     const parsed = JSON.parse(jsonStr) as { event: string | null; startDate?: string; endDate?: string; source?: string };
     if (!parsed.event || !parsed.startDate) return null;
 
+    // Grounded responses sometimes cite a monstrous grounding-redirect URL as
+    // the source — keep sources human-readable (names/hosts, never raw URLs).
+    const source = (() => {
+      const s = (parsed.source ?? "")
+        .replace(/https?:\/\/\S+/g, (url) => {
+          try {
+            const host = new URL(url).hostname.replace(/^www\./, "");
+            return host.includes("vertexaisearch") || host.includes("google") ? "" : host;
+          } catch { return ""; }
+        })
+        .replace(/\(\s*\)/g, "")
+        .replace(/\s{2,}/g, " ")
+        .replace(/^[\s,;-]+|[\s,;-]+$/g, "");
+      return s || "Google Search";
+    })();
+
     const dateInfo = `EVENT DATES (verified via Google Search):\n` +
       `  Event: ${parsed.event}\n` +
       `  Start: ${parsed.startDate}\n` +
       `  End: ${parsed.endDate ?? parsed.startDate}\n` +
-      `  Source: ${parsed.source ?? "Google Search"}\n` +
+      `  Source: ${source}\n` +
       `  → Use these dates for startDate/endDate. If the traveler asked for a shorter duration ` +
       `(e.g. "a week"), center it within the event window. Log the source in inferenceChain.`;
 
-    cb.onThought(`Found: ${parsed.event} runs ${parsed.startDate} → ${parsed.endDate ?? parsed.startDate} (${parsed.source ?? "Google Search"})`);
+    cb.onThought(`Found: ${parsed.event} runs ${parsed.startDate} → ${parsed.endDate ?? parsed.startDate} (source: ${source})`);
     return dateInfo;
   } catch {
     return null;

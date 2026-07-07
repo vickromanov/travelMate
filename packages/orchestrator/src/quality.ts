@@ -236,6 +236,37 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
           warn("transport-directions-link", bWhere, "ANCHOR transport option link is not a maps/directions URL", day.dayNumber);
         }
       }
+
+      // ACCESS TRANSPARENCY (H3, zero-thinking). An ACTIVITIES option whose
+      // venue name signals remote/paid access — "summit", "peak", "cable
+      // car", "ferry to X" — cannot silently claim "Free" without saying HOW
+      // the traveler gets there. Either accessNotes explains the paid
+      // access, or the price reflects it, or the description does.
+      if (b.category === "ACTIVITIES") {
+        for (const o of b.options) {
+          const remoteLike = /\b(summit|peak|glacier|top station|cable ?car|gondola|funicular|ferry|island(?!$)|monastery|abbey|shrine|castle|fjord|crater|volcano)\b/i;
+          const looksRemote = remoteLike.test(o.title);
+          const looksFree = o.price.amount === 0;
+          // Narrow signals that the option ACTUALLY explains how they get
+          // there, not just any word that happens to appear in prose.
+          const explainsAccess =
+            /\b(cable ?car|gondola|funicular|cogwheel|ferry|shuttle|tramway|round-?trip|included|reach(?:able)? (?:via|by|through|only)|access(?:ible)? (?:via|by|through|from)|on foot|walk-in|walk in|hike (?:up|to)|by (?:car|taxi|tram|bus|metro|train))\b/i;
+          const evidenceOfAccess = !!(
+            (o.accessNotes && o.accessNotes.length > 8) ||
+            explainsAccess.test(o.description) ||
+            explainsAccess.test(o.reasoning)
+          );
+          if (looksRemote && looksFree && !evidenceOfAccess) {
+            err("access-cost-transparency", bWhere,
+              `option "${o.title}" is marked Free but its location typically requires paid access — set accessNotes explaining how the traveler reaches it, and include access cost in price if not already paid in a sibling option`,
+              day.dayNumber);
+          } else if (looksRemote && !evidenceOfAccess) {
+            warn("access-cost-transparency", bWhere,
+              `option "${o.title}" looks remote — please state how the traveler reaches it (accessNotes)`,
+              day.dayNumber);
+          }
+        }
+      }
     }
 
     // Hotel consistency across the trip (warning — city moves are legitimate)

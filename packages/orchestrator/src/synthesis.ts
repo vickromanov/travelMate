@@ -243,11 +243,14 @@ EVERY option must have:
     popular restaurants, shows, thermal baths, hotels not yet booked):
       * "bookingRequired": true
       * "bookingUrl": the ticket/reservation page — SAME anti-hallucination rules as
-        links. When unsure of the exact page use a deterministic search deep link:
+        links. A TICKETED attraction/tour/hotel must NEVER lack a bookingUrl: when
+        the official page is uncertain, use the deterministic search deep link:
         hotels → "https://www.booking.com/searchresults.html?ss=NAME+CITY"
-        tours/attractions → "https://www.getyourguide.com/s/?q=NAME+CITY"
-        restaurants → official site if certain, otherwise omit bookingUrl and put
-        "reserve by phone" guidance in bookingAdvice (phoneNumber is already there)
+        tours/attractions/shows → "https://www.getyourguide.com/s/?q=NAME+CITY"
+        restaurants → official reservation page if certain, otherwise omit bookingUrl
+        and set bookingRequired true with the phone number (phoneNumber field) and
+        "reserve by phone" guidance in bookingAdvice
+        walk-in venues (cafés, parks, markets) → bookingRequired false, no bookingUrl
       * "priceDetail": the per-person breakdown behind the party total —
         "Adults EUR 15, children under 12 free"; include child rates for families
       * "bookingAdvice": HOW to secure it — how far ahead, timed entry, skip-the-line,
@@ -265,6 +268,44 @@ EVERY option must have:
     If you are not 100% sure of any URL, use the Google Maps link — a working,
     venue-specific link ALWAYS beats a guessed one. (Every link you output is
     verified by the system; fabricated ones get replaced.)
+
+    ⚠ LINK MUST BE VENUE-SPECIFIC — NOT A PARENT / REGION SITE.
+    A restaurant "Gipfelalm Zugspitze" must NOT link to "zugspitze.de" (that is
+    the mountain/region site, not the restaurant). A shop inside a mall does not
+    link to the mall's homepage. Rule: the venue's OWN NAME (or a distinctive
+    slug from it) must appear in the URL's host or path. If it doesn't, use the
+    Google Maps link for that exact venue instead — the map WILL take the
+    traveler to the right pin.
+
+=== ZERO-THINKING ACCESS TRANSPARENCY (H3, mandatory) ===
+Every ACTIVITIES / LOGISTICS / dining-with-remote-location option must answer
+ONE question up front: "How do I get to this and what does it truly cost?"
+
+- If the venue is reachable ONLY by paid transport (mountain summits, remote
+  monasteries, islands with ferries, ski areas, national park interiors):
+    * "price" MUST include the round-trip access cost for the party. A "Free"
+      Zugspitze summit walk is FORBIDDEN — the summit is only reachable by
+      cable car / cogwheel train (~EUR 70/person round trip). If the traveler
+      is already paying for the cable car in this SAME block (e.g. one option
+      is "Cogwheel Train + Summit", another is "Summit Platform Walk"), the
+      "Summit Platform Walk" option MUST bundle the cable car cost into its
+      price — because without it the option is unreachable.
+    * "accessNotes": one sentence explaining how they get there and what's
+      included, e.g. "Round-trip Zugspitze Cogwheel Train (~EUR 70/person)
+      included in the price — otherwise not reachable".
+    * The description must state the same cost transparently.
+
+- If the venue is reachable on foot from the previous block, or otherwise has
+  no hidden access cost, set:
+    * "accessNotes": "Walk-in / accessible on foot from previous stop" (or
+      similar honest one-liner like "Included with your Munich transit pass").
+
+- NEVER present two options in the same block where one includes access and
+  another silently omits it — the traveler will assume they're equivalent.
+  ALL options in one block must state their access costs the same way.
+
+Zero thinking = zero surprises. If you cannot fit here without hidden cost,
+the price you show must reflect that. Period.
 
 scheduledTime must progress realistically through the day.
 Add 20-30 min buffer between morning→afternoon, afternoon→evening.

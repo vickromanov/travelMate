@@ -319,6 +319,58 @@ describe("validatePlanQuality — nightly vs whole-stay price", () => {
   });
 });
 
+describe("validatePlanQuality — access cost transparency (H3)", () => {
+  function planWithSummitOptions(): TripPlan {
+    const plan = goodPlan(1);
+    const activity = plan.days[0]!.blocks.find((b) => b.category === "ACTIVITIES")!;
+    // 4 options: two mention paid access in description, two do not
+    activity.options[0]!.title = "Zugspitze Cogwheel Train + Summit";
+    activity.options[0]!.description = "Round-trip cogwheel train included, ~EUR 70/person";
+    activity.options[1]!.title = "Eibsee Cable Car + Summit";
+    activity.options[1]!.description = "Return cable car included";
+    activity.options[2]!.title = "Private Guide Tour to Summit";
+    activity.options[2]!.description = "Guide + transport included";
+    activity.options[3]!.title = "Summit Platform Walk";
+    activity.options[3]!.description = "Free walk around the summit platform.";
+    activity.options[3]!.reasoning = "For those already at the top.";
+    activity.options[3]!.price = { amount: 0, currency: "EUR" };
+    return plan;
+  }
+
+  it("errors on a Free 'summit' option with no explanation of how they get there", () => {
+    const plan = planWithSummitOptions();
+    const report = validatePlanQuality(plan);
+    const issue = report.issues.find((i) => i.rule === "access-cost-transparency");
+    expect(issue?.severity).toBe("error");
+    expect(issue?.message).toContain("Summit Platform Walk");
+  });
+
+  it("passes when the Free option's accessNotes explain the access", () => {
+    const plan = planWithSummitOptions();
+    const activity = plan.days[0]!.blocks.find((b) => b.category === "ACTIVITIES")!;
+    activity.options[3]!.accessNotes = "Included with any of the cable car / cogwheel train options above";
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "access-cost-transparency" && i.severity === "error")).toBe(false);
+  });
+
+  it("passes when the description already explains transportation", () => {
+    const plan = planWithSummitOptions();
+    const activity = plan.days[0]!.blocks.find((b) => b.category === "ACTIVITIES")!;
+    activity.options[3]!.description =
+      "Free walk-in exploration of the summit platform. Requires round-trip cable car (~EUR 70/person) to reach the top.";
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "access-cost-transparency" && i.severity === "error")).toBe(false);
+  });
+
+  it("does not flag normal city activities as remote", () => {
+    const plan = goodPlan(1);
+    const activity = plan.days[0]!.blocks.find((b) => b.category === "ACTIVITIES")!;
+    for (const o of activity.options) o.price = { amount: 0, currency: "EUR" };
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "access-cost-transparency")).toBe(false);
+  });
+});
+
 describe("enforceBudgetBySwaps", () => {
   function planWithCheaperOptions(): TripPlan {
     const plan = goodPlan(1);
