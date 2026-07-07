@@ -70,45 +70,16 @@ export const TravelOptionSchema = z.object({
   description: z.string().nullish().transform((v) => v ?? ""),
   reasoning: z.string().nullish().transform((v) => v ?? ""),
   price: MoneySchema,
-  // A wholly missing location degrades to a zeroed one — the quality
-  // validator flags (0,0) coords and empty addresses, but the plan survives.
-  location: z.preprocess(
-    (v) => v ?? { lat: 0, lng: 0, address: "" },
-    GeoLocationSchema,
-  ),
+  location: GeoLocationSchema,
   scheduledTime: optStr(),
   durationMinutes: optNum(z.number().int().positive()),
   bookingRequired: z.boolean().nullish().transform((v) => v ?? undefined),
   bookingUrl: optStr(),
-  /** Per-person ticket/price breakdown behind the party-total `price`,
-   *  e.g. "Adults EUR 15, children under 12 free". */
-  priceDetail: optStr(),
-  /** How to actually secure the spot, e.g. "Timed entry — book 2-3 days
-   *  ahead, sells out on weekends" or "Reserve by phone a day before". */
-  bookingAdvice: optStr(),
-  /**
-   * How the traveler PHYSICALLY reaches this venue and what it truly costs
-   * beyond the entrance ticket — e.g. "Reachable only via Zugspitze Cogwheel
-   * Train, ~EUR 70/person round trip, included in your Cable Car option
-   * above". If this venue is walk-in from the previous block, this is
-   * "Walk-in / accessible on foot from previous stop". Cross-cutting field
-   * used to KILL zero-thinking gaps (H3).
-   */
-  accessNotes: optStr(),
   openingHours: optStr(),
   phoneNumber: optStr(),
   affiliationRef: optStr(),
   /** Primary clickable link for the card header. Official site, Google Maps, or directions. */
   link: optStr(),
-  /**
-   * What the link IS, chosen deliberately per option: tickets to buy, a table/
-   * room to book, the official site, a map pin, or turn-by-turn directions.
-   * Lets the UX label the action ("Buy tickets" vs "View on map").
-   */
-  linkType: z
-    .enum(["TICKETS", "BOOKING", "OFFICIAL", "MAPS", "DIRECTIONS"])
-    .nullish()
-    .transform((v) => v ?? undefined),
 });
 export type TravelOption = z.infer<typeof TravelOptionSchema>;
 
@@ -133,7 +104,7 @@ export const ItineraryBlockSchema = z.object({
    * location → re-flow when the hotel changes). projectStructure.md §2 Refinement 1.
    */
   dependencyLogic: z.string(),
-  options: z.array(TravelOptionSchema).min(4).max(4),
+  options: z.array(TravelOptionSchema).min(1).max(4),
 });
 export type ItineraryBlock = z.infer<typeof ItineraryBlockSchema>;
 
