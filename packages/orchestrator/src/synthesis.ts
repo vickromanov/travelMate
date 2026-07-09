@@ -121,8 +121,10 @@ export function computeNumDays(brief: TripBrief): { numDays: number; start: stri
   // No date at all → 30 days from today (never a hardcoded date)
   const start = f.startDate ?? addDays(new Date().toISOString().slice(0, 10), 30);
   const end = f.endDate;
+  // endDate is the LAST day of the trip, so the count is INCLUSIVE:
+  // "03.07 to 05.07" = arrival day + full day + departure day = 3 days, not 2.
   const numDays = end
-    ? Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000))
+    ? Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1)
     : (() => {
         for (const entry of brief.inferenceChain) {
           const numMatch = entry.assumed.match(/(\d+)\s*(?:days?|nights?)/i);
