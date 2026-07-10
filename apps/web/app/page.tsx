@@ -123,17 +123,7 @@ function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
         </p>
       </div>
 
-      <div
-        className="card"
-        style={{
-          padding: 8,
-          background: "var(--surface)",
-          border: "1px solid var(--border-strong)",
-          borderRadius: 16,
-          boxShadow: "0 8px 30px rgba(0,0,0,0.06)",
-          animation: "fadeUp 0.5s ease 0.08s backwards",
-        }}
-      >
+      <div className="card" style={{ padding: 8, boxShadow: "var(--shadow-lg)", animation: "fadeUp 0.5s ease 0.08s backwards" }}>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -142,7 +132,6 @@ function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
             width: "100%", minHeight: 120, padding: "16px 18px",
             background: "transparent", border: "none",
             resize: "vertical", outline: "none", lineHeight: 1.6, fontSize: 15.5,
-            color: "var(--ink)",
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim()) {
@@ -150,22 +139,12 @@ function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
             }
           }}
         />
-        <div style={{ display: "flex", justifyContent: "flex-end", padding: "4px 8px 8px" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 8px 8px" }}>
           <button
+            className="btn-primary"
             onClick={() => text.trim() && onSubmit(text.trim())}
             disabled={!text.trim()}
-            style={{
-              padding: "12px 30px",
-              fontSize: 15,
-              fontWeight: 600,
-              borderRadius: 999,
-              border: "none",
-              background: text.trim() ? "var(--accent)" : "var(--border)",
-              color: text.trim() ? "#fff" : "var(--muted)",
-              cursor: text.trim() ? "pointer" : "default",
-              transition: "all 0.2s ease",
-              boxShadow: text.trim() ? "0 4px 14px rgba(226, 96, 58, 0.35)" : "none",
-            }}
+            style={{ padding: "12px 30px", fontSize: 15 }}
           >
             Plan my trip →
           </button>
