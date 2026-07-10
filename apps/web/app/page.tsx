@@ -169,19 +169,130 @@ function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
 
 // ── Thinking screen ───────────────────────────────────────────────────────────
 
-// Curated HQ Unsplash travel photos with location captions
-const TRAVEL_PHOTOS: Array<{ id: string; caption: string; sub: string }> = [
-  { id: "photo-1469854523086-cc02fe5d8800", caption: "Pacific Coast Highway", sub: "California, USA" },
-  { id: "photo-1488646953014-85cb44e25828", caption: "Paradise Cove", sub: "Maldives" },
-  { id: "photo-1476514525535-07fb3b4ae5f1", caption: "Peyto Lake", sub: "Banff, Canada" },
-  { id: "photo-1530789253388-582c481c54b0", caption: "Antelope Canyon", sub: "Arizona, USA" },
-  { id: "photo-1500259571355-332da5cb07aa", caption: "Rue de Rivoli", sub: "Paris, France" },
-  { id: "photo-1506929562872-bb421503ef21", caption: "Bora Bora Lagoon", sub: "French Polynesia" },
-  { id: "photo-1543158181-e6f9f6712055", caption: "Shibuya Crossing", sub: "Tokyo, Japan" },
-  { id: "photo-1552832230-c0197dd311b5", caption: "The Colosseum at Dusk", sub: "Rome, Italy" },
-  { id: "photo-1523906834658-6e24ef2386f9", caption: "Grand Canal", sub: "Venice, Italy" },
-  { id: "photo-1513581166391-887a96ddeafd", caption: "Oia Village", sub: "Santorini, Greece" },
+// Curated HQ Unsplash travel photos (ambient background)
+const TRAVEL_PHOTOS: string[] = [
+  "photo-1469854523086-cc02fe5d8800",
+  "photo-1488646953014-85cb44e25828",
+  "photo-1476514525535-07fb3b4ae5f1",
+  "photo-1530789253388-582c481c54b0",
+  "photo-1500259571355-332da5cb07aa",
+  "photo-1506929562872-bb421503ef21",
+  "photo-1543158181-e6f9f6712055",
+  "photo-1552832230-c0197dd311b5",
+  "photo-1523906834658-6e24ef2386f9",
+  "photo-1513581166391-887a96ddeafd",
 ];
+
+// ── Destination-aware travel tips ─────────────────────────────────────────────
+const DESTINATION_TIPS: Record<string, string[]> = {
+  bavaria: [
+    "💡 Bavaria is home to over 6,000 beer gardens — try a Maß at a traditional one",
+    "🏰 Neuschwanstein Castle inspired the Disney fairy-tale castle",
+    "🏔️ The Zugspitze is Germany's highest peak at 2,962 m",
+    "🥨 Don't miss a fresh Brezn (pretzel) with Obatzda cheese",
+    "🎶 Munich's Viktualienmarkt has been running since 1807",
+  ],
+  germany: [
+    "🍺 Germany has over 1,300 breweries — more than any other country in Europe",
+    "🏰 There are over 20,000 castles and castle ruins across Germany",
+    "🚄 The ICE trains reach speeds of 300 km/h — perfect for city-hopping",
+    "🌲 The Black Forest inspired many of the Brothers Grimm fairy tales",
+    "🎄 German Christmas markets date back to the 14th century",
+  ],
+  thailand: [
+    "🙏 A traditional Thai greeting (wai) involves pressing palms together",
+    "🍜 Bangkok's street food scene was ranked best in the world by CNN",
+    "🏝️ Thailand has 1,430 islands — most still untouched by tourism",
+    "🐘 Elephant Nature Park in Chiang Mai is an ethical sanctuary",
+    "🌺 The floating markets of Damnoen Saduak are over 100 years old",
+  ],
+  japan: [
+    "🗼 Tokyo has more Michelin-starred restaurants than any other city",
+    "🚅 The Shinkansen bullet trains have an average delay of under 1 minute",
+    "🌸 Cherry blossom season (hanami) typically peaks in late March to mid-April",
+    "♨️ Japan has over 27,000 natural hot spring (onsen) sources",
+    "🏯 Kyoto has 17 UNESCO World Heritage Sites within the city",
+  ],
+  italy: [
+    "🍝 Each Italian region has its own signature pasta shape and sauce",
+    "🏛️ Rome's Colosseum could seat 50,000 spectators in ancient times",
+    "🍕 Neapolitan pizza has been UNESCO Intangible Cultural Heritage since 2017",
+    "🎭 Venice's Carnival has been celebrated since the 12th century",
+    "🍷 Italy is the world's largest wine producer by volume",
+  ],
+  france: [
+    "🥐 The French consume 30 million baguettes every single day",
+    "🗼 The Eiffel Tower was meant to be temporary — built for the 1889 World Fair",
+    "🍷 France has over 300 distinct cheese varieties",
+    "🎨 The Louvre is the world's largest art museum with 380,000 objects",
+    "🌊 The French Riviera gets 300+ days of sunshine per year",
+  ],
+  spain: [
+    "💃 Flamenco originated in Andalusia and is UNESCO Intangible Heritage",
+    "🍅 La Tomatina in Buñol uses over 150,000 tomatoes every August",
+    "🏗️ Sagrada Família in Barcelona has been under construction since 1882",
+    "🍷 Spain has the most land devoted to vineyards in the world",
+    "🌙 Dinner in Spain typically starts at 9–10 PM — embrace the late schedule",
+  ],
+  greece: [
+    "🏛️ Athens is one of the oldest cities in the world — inhabited for over 3,400 years",
+    "🏝️ Greece has approximately 6,000 islands, but only 227 are inhabited",
+    "🫒 Greek olive oil production dates back over 4,000 years",
+    "🌅 Santorini's caldera sunset is considered one of the most beautiful in the world",
+    "🧿 The blue evil eye (mati) charm is a beloved Greek tradition",
+  ],
+  portugal: [
+    "🎶 Fado music is Portugal's soulful UNESCO-listed art form",
+    "🍮 Pastéis de nata originated in Belém — the original recipe is still secret",
+    "🏄 Nazaré holds the world record for the largest wave ever surfed (26.2 m)",
+    "🌉 Lisbon's Ponte 25 de Abril was inspired by the Golden Gate Bridge",
+    "🍷 Port wine can only be called 'Port' if produced in the Douro Valley",
+  ],
+  usa: [
+    "🗽 The Statue of Liberty was a gift from France, dedicated in 1886",
+    "🏜️ The Grand Canyon is over 6 million years old",
+    "🌉 San Francisco's fog has a name — locals call it 'Karl'",
+    "🎷 New Orleans is the birthplace of jazz music",
+    "🌲 The US has 63 national parks spanning every climate zone",
+  ],
+};
+
+const GENERIC_TIPS: string[] = [
+  "💡 Download offline maps before your trip — they work without data",
+  "📱 Most countries accept contactless payments — bring a travel-friendly card",
+  "🧳 Roll your clothes instead of folding — it saves 30% more space",
+  "💧 Carry a reusable water bottle — many airports have refill stations",
+  "📸 The golden hour (just after sunrise, before sunset) gives the best photos",
+  "🔌 Check plug adapters before you go — there are 15 different types worldwide",
+  "🌍 Learning just 5 phrases in the local language goes a long way",
+  "💰 Withdraw local currency at ATMs, not exchange bureaus — better rates",
+  "🩺 Travel insurance costs ~5% of your trip but covers 100% of the unexpected",
+  "✈️ Tuesday and Wednesday flights are typically 15–20% cheaper",
+];
+
+function getTipsForDestination(destination: string): string[] {
+  const lower = destination.toLowerCase();
+  // Try exact key match first, then check if destination contains any key
+  for (const [key, tips] of Object.entries(DESTINATION_TIPS)) {
+    if (lower.includes(key) || key.includes(lower)) return tips;
+  }
+  // Check for known aliases
+  const aliases: Record<string, string> = {
+    munich: "bavaria", berlin: "germany", hamburg: "germany", frankfurt: "germany",
+    bangkok: "thailand", "chiang mai": "thailand", phuket: "thailand",
+    tokyo: "japan", kyoto: "japan", osaka: "japan",
+    rome: "italy", venice: "italy", florence: "italy", milan: "italy",
+    paris: "france", nice: "france", lyon: "france", marseille: "france",
+    barcelona: "spain", madrid: "spain", seville: "spain",
+    athens: "greece", santorini: "greece", mykonos: "greece", crete: "greece",
+    lisbon: "portugal", porto: "portugal", "new york": "usa", "las vegas": "usa",
+    "los angeles": "usa", "san francisco": "usa",
+  };
+  for (const [alias, key] of Object.entries(aliases)) {
+    if (lower.includes(alias)) return DESTINATION_TIPS[key] ?? GENERIC_TIPS;
+  }
+  return GENERIC_TIPS;
+}
 
 function estimateProgress(thoughts: string[]): number {
   const last = (thoughts[thoughts.length - 1] ?? "").toLowerCase();
@@ -204,22 +315,18 @@ function estimateProgress(thoughts: string[]): number {
   return 3;
 }
 
-function ThinkingScreen({ thoughts, destination }: { thoughts: string[]; destination: string }) {
+function ThinkingScreen({ thoughts, destination, tripType }: { thoughts: string[]; destination: string; tripType: string }) {
   const [imgIdx, setImgIdx] = useState(0);
   const [prevIdx, setPrevIdx] = useState<number | null>(null);
   const [transitioning, setTransitioning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [kbKey, setKbKey] = useState(0); // triggers Ken Burns restart on each image
+  const [kbKey, setKbKey] = useState(0);
+  const [tipIdx, setTipIdx] = useState(0);
 
-  // All curated photos — reliable IDs, no deprecated source.unsplash URLs
-  const allPhotos = TRAVEL_PHOTOS.map((p) => ({
-    url: `https://images.unsplash.com/${p.id}?w=1920&q=85&fit=crop`,
-    caption: p.caption,
-    sub: p.sub,
-  }));
-  const images = allPhotos.map((p) => p.url);
+  const images = TRAVEL_PHOTOS.map((id) => `https://images.unsplash.com/${id}?w=1920&q=85&fit=crop`);
+  const tips = getTipsForDestination(destination);
 
-  // Crossfade every 6s
+  // Crossfade background every 6s
   useEffect(() => {
     const t = setInterval(() => {
       setTransitioning(true);
@@ -235,6 +342,13 @@ function ThinkingScreen({ thoughts, destination }: { thoughts: string[]; destina
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imgIdx, images.length]);
 
+  // Rotate tips every 5s
+  useEffect(() => {
+    const t = setInterval(() => setTipIdx((i) => (i + 1) % tips.length), 5000);
+    return () => clearInterval(t);
+  }, [tips.length]);
+
+  // Elapsed timer
   useEffect(() => {
     const t = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(t);
@@ -242,11 +356,16 @@ function ThinkingScreen({ thoughts, destination }: { thoughts: string[]; destina
 
   const progress = estimateProgress(thoughts);
   const latestThought = thoughts[thoughts.length - 1] ?? "";
-  const prevThoughts = thoughts.slice(-5, -1); // last 4 before current
+  const prevThoughts = thoughts.slice(-4, -1);
 
   const mins = Math.floor(elapsed / 60);
   const secs = elapsed % 60;
   const elapsedStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+  // Human-friendly trip type label
+  const tripLabel = tripType && tripType !== "city break"
+    ? tripType.charAt(0).toUpperCase() + tripType.slice(1) + " adventure"
+    : "Your perfect journey is being crafted";
 
   return (
     <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#0a1628" }}>
@@ -260,29 +379,35 @@ function ThinkingScreen({ thoughts, destination }: { thoughts: string[]; destina
           from { opacity: 0; transform: translateY(12px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        @keyframes shimmer {
-          0%   { background-position: -200% center; }
-          100% { background-position: 200% center; }
-        }
         @keyframes planePulse {
-          0%, 100% { transform: translateX(0) translateY(0); }
-          25%       { transform: translateX(3px) translateY(-2px); }
-          75%       { transform: translateX(-2px) translateY(1px); }
+          0%, 100% { transform: translateX(0) translateY(0) rotate(-45deg); }
+          25%       { transform: translateX(3px) translateY(-2px) rotate(-45deg); }
+          75%       { transform: translateX(-2px) translateY(1px) rotate(-45deg); }
         }
         @keyframes progressGlow {
           0%, 100% { box-shadow: 0 0 8px rgba(226,96,58,0.5); }
           50%       { box-shadow: 0 0 18px rgba(226,96,58,0.9); }
         }
-        .thinking-thought-prev {
-          animation: fadeInUp 0.4s ease forwards;
+        @keyframes tipFade {
+          0%   { opacity: 0; transform: translateY(6px); }
+          12%  { opacity: 1; transform: translateY(0); }
+          88%  { opacity: 1; transform: translateY(0); }
+          100% { opacity: 0; transform: translateY(-6px); }
         }
-        .thinking-thought-latest {
+        @keyframes orbFloat {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33%      { transform: translate(30px, -20px) scale(1.05); }
+          66%      { transform: translate(-20px, 10px) scale(0.95); }
+        }
+        .thinking-step-done {
+          animation: fadeInUp 0.3s ease forwards;
+        }
+        .thinking-step-active {
           animation: fadeInUp 0.35s ease forwards;
         }
       `}</style>
 
       {/* === Background image layer === */}
-      {/* Outgoing image */}
       {prevIdx !== null && (
         <div style={{
           position: "absolute", inset: 0, zIndex: 0,
@@ -292,7 +417,6 @@ function ThinkingScreen({ thoughts, destination }: { thoughts: string[]; destina
           transition: "opacity 1.4s ease",
         }} />
       )}
-      {/* Current image with Ken Burns */}
       <div
         key={kbKey}
         style={{
@@ -308,36 +432,47 @@ function ThinkingScreen({ thoughts, destination }: { thoughts: string[]; destina
       {/* Gradient overlays */}
       <div style={{
         position: "absolute", inset: 0, zIndex: 2,
-        background: "linear-gradient(to bottom, rgba(8,18,40,0.55) 0%, rgba(8,18,40,0.2) 35%, rgba(8,18,40,0.5) 65%, rgba(8,18,40,0.92) 100%)",
+        background: "linear-gradient(to bottom, rgba(8,18,40,0.6) 0%, rgba(8,18,40,0.25) 30%, rgba(8,18,40,0.45) 60%, rgba(8,18,40,0.95) 100%)",
       }} />
 
       {/* === Content === */}
-      <div style={{ position: "absolute", inset: 0, zIndex: 3, display: "flex", flexDirection: "column" }}>
+      <div style={{
+        position: "absolute", inset: 0, zIndex: 3,
+        display: "flex", flexDirection: "column",
+        maxHeight: "100vh",
+      }}>
 
         {/* Top bar */}
         <div style={{
-          padding: "24px 32px",
+          padding: "20px 28px",
           display: "flex", justifyContent: "space-between", alignItems: "center",
+          flexShrink: 0,
         }}>
-          <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: 700, letterSpacing: 2.5, textTransform: "uppercase" }}>
+          <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: 700, letterSpacing: 2.5, textTransform: "uppercase" }}>
             ✈ TravelMate
           </div>
           <div style={{
-            background: "rgba(255,255,255,0.12)", backdropFilter: "blur(12px)",
-            border: "1px solid rgba(255,255,255,0.2)", borderRadius: 999,
-            padding: "6px 14px", color: "rgba(255,255,255,0.8)", fontSize: 12, fontWeight: 600,
+            background: "rgba(255,255,255,0.1)", backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            border: "1px solid rgba(255,255,255,0.15)", borderRadius: 999,
+            padding: "5px 14px", color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 600,
           }}>
             ⏱ {elapsedStr}
           </div>
         </div>
 
         {/* Center hero */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 24px", textAlign: "center" }}>
+        <div style={{
+          flex: 1, display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          padding: "0 24px", textAlign: "center",
+          minHeight: 0, /* allow shrinking */
+        }}>
           {/* Plane icon */}
           <div style={{
-            fontSize: 44, marginBottom: 20,
+            fontSize: 32, marginBottom: 16,
             animation: "planePulse 3s ease-in-out infinite",
-            filter: "drop-shadow(0 4px 20px rgba(226,96,58,0.6))",
+            filter: "drop-shadow(0 4px 20px rgba(226,96,58,0.5))",
           }}>
             ✈
           </div>
@@ -345,55 +480,41 @@ function ThinkingScreen({ thoughts, destination }: { thoughts: string[]; destina
           {/* Destination */}
           <h1 style={{
             fontFamily: "var(--font-display-stack)",
-            fontSize: "clamp(44px, 8vw, 84px)",
-            fontWeight: 900, color: "#fff", lineHeight: 1.0,
-            marginBottom: 14, letterSpacing: -1,
+            fontSize: "clamp(36px, 7vw, 72px)",
+            fontWeight: 900, color: "#fff", lineHeight: 1.05,
+            marginBottom: 10, letterSpacing: -1,
             textShadow: "0 4px 32px rgba(0,0,0,0.5)",
           }}>
             {destination}
           </h1>
           <p style={{
-            color: "rgba(255,255,255,0.65)", fontSize: 16, fontWeight: 500,
-            letterSpacing: 1, textTransform: "uppercase",
+            color: "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: 500,
+            letterSpacing: 1.5, textTransform: "uppercase",
           }}>
-            Your perfect journey is being crafted
+            {tripLabel}
           </p>
-
-          {/* Currently showing photo caption */}
-          <div key={imgIdx} style={{
-            marginTop: 28,
-            display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 2,
-            animation: "fadeInUp 1s ease forwards",
-            opacity: 0,
-          }}>
-            <div style={{
-              width: 32, height: 1, background: "rgba(255,255,255,0.4)", marginBottom: 8,
-            }} />
-            <span style={{ color: "rgba(255,255,255,0.9)", fontSize: 15, fontWeight: 600, letterSpacing: 0.5 }}>
-              {allPhotos[imgIdx]?.caption}
-            </span>
-            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase" }}>
-              {allPhotos[imgIdx]?.sub}
-            </span>
-          </div>
         </div>
 
-        {/* Bottom panel */}
-        <div style={{ padding: "0 24px 32px", maxWidth: 680, width: "100%", margin: "0 auto" }}>
+        {/* Bottom panel — progress + status card */}
+        <div style={{
+          padding: "0 24px 24px",
+          maxWidth: 560, width: "100%", margin: "0 auto",
+          flexShrink: 0,
+        }}>
 
           {/* Progress bar */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, alignItems: "baseline" }}>
-              <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 600 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, alignItems: "baseline" }}>
+              <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 10, letterSpacing: 1.8, textTransform: "uppercase", fontWeight: 600 }}>
                 Building your itinerary
               </span>
-              <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 700 }}>
+              <span style={{ color: "rgba(255,255,255,0.65)", fontSize: 11, fontWeight: 700 }}>
                 {progress}%
               </span>
             </div>
             <div style={{
-              height: 4, borderRadius: 999,
-              background: "rgba(255,255,255,0.12)",
+              height: 3, borderRadius: 999,
+              background: "rgba(255,255,255,0.1)",
               overflow: "hidden",
             }}>
               <div style={{
@@ -406,119 +527,68 @@ function ThinkingScreen({ thoughts, destination }: { thoughts: string[]; destina
             </div>
           </div>
 
-          {/* Boarding pass ticket */}
+          {/* Glass status card */}
           <div style={{
-            background: "rgba(255,255,255,0.96)",
-            borderRadius: 16,
-            boxShadow: "0 32px 80px rgba(0,0,0,0.45), 0 2px 0 rgba(255,255,255,0.5)",
-            overflow: "hidden",
-            position: "relative",
+            background: "rgba(255,255,255,0.07)",
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+            borderRadius: 14,
+            border: "1px solid rgba(255,255,255,0.12)",
+            padding: "14px 16px",
+            maxHeight: 160, overflowY: "auto",
           }}>
-            {/* Ticket header strip */}
-            <div style={{
-              background: "var(--navy)",
-              padding: "12px 20px",
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-            }}>
-              <div style={{ color: "#fff", fontSize: 11, letterSpacing: 2.5, fontWeight: 800, textTransform: "uppercase" }}>
-                ✈ TravelMate Air
+            {/* Previous steps */}
+            {prevThoughts.map((t, i) => (
+              <div key={i} className="thinking-step-done" style={{
+                display: "flex", gap: 10, alignItems: "center",
+                marginBottom: 5, opacity: 0.5,
+              }}>
+                <span style={{ fontSize: 10, color: "#4ade80", fontWeight: 700, flexShrink: 0 }}>✓</span>
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", lineHeight: 1.4 }}>{t}</span>
               </div>
-              <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 10, letterSpacing: 1.5, fontWeight: 600, textTransform: "uppercase" }}>
-                Boarding Pass
-              </div>
-            </div>
+            ))}
 
-            {/* FROM → TO row */}
-            <div style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "16px 20px 12px",
-              borderBottom: "1px solid rgba(0,0,0,0.07)",
-            }}>
-              <div style={{ textAlign: "left" }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>From</div>
-                <div style={{ fontSize: 22, fontWeight: 900, color: "var(--navy)", fontFamily: "var(--font-display-stack)", letterSpacing: -0.5 }}>HOME</div>
-              </div>
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "0 12px" }}>
-                <div style={{ fontSize: 18, color: "var(--accent)" }}>✈</div>
-                <div style={{ height: 1, width: "100%", borderTop: "1.5px dashed rgba(0,0,0,0.15)" }} />
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>To</div>
-                <div style={{ fontSize: 22, fontWeight: 900, color: "var(--navy)", fontFamily: "var(--font-display-stack)", letterSpacing: -0.5 }}>
-                  {destination.toUpperCase().slice(0, 10)}
-                </div>
-              </div>
-            </div>
-
-            {/* Status log */}
-            <div style={{ padding: "14px 20px" }}>
-              {/* Previous steps */}
-              {prevThoughts.map((t, i) => (
-                <div key={i} style={{
-                  display: "flex", gap: 10, alignItems: "center",
-                  marginBottom: 6, opacity: 0.45,
-                }}>
-                  <span style={{ fontSize: 11, color: "var(--teal)", fontWeight: 700, flexShrink: 0 }}>✓</span>
-                  <span style={{ fontSize: 12.5, color: "var(--ink-soft)", lineHeight: 1.4 }}>{t}</span>
-                </div>
-              ))}
-
-              {/* Active step with plane icon */}
-              {latestThought && (
-                <div key={latestThought} className="thinking-thought-latest" style={{
-                  display: "flex", gap: 10, alignItems: "center",
-                  background: "var(--accent-soft)",
-                  border: "1px solid rgba(226,96,58,0.2)",
-                  borderRadius: 8, padding: "9px 12px",
-                  marginTop: prevThoughts.length > 0 ? 4 : 0,
-                }}>
-                  <span style={{
-                    fontSize: 14, flexShrink: 0,
-                    animation: "planePulse 2s ease-in-out infinite",
-                    display: "inline-block",
-                  }}>✈</span>
-                  <span style={{ fontSize: 13, color: "var(--ink)", fontWeight: 600, lineHeight: 1.4 }}>
-                    {latestThought}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Tear-off perforation */}
-            <div style={{ display: "flex", alignItems: "center", padding: "0 0", margin: "0 -1px" }}>
-              <div style={{ width: 16, height: 16, borderRadius: "50%", background: "rgba(8,18,40,0.35)", flexShrink: 0 }} />
-              <div style={{ flex: 1, borderTop: "2px dashed rgba(0,0,0,0.12)" }} />
-              <div style={{ width: 16, height: 16, borderRadius: "50%", background: "rgba(8,18,40,0.35)", flexShrink: 0 }} />
-            </div>
-
-            {/* Progress / barcode section */}
-            <div style={{ padding: "14px 20px 16px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", letterSpacing: 2, textTransform: "uppercase" }}>
-                  Flight Progress
+            {/* Active step */}
+            {latestThought && (
+              <div key={latestThought} className="thinking-step-active" style={{
+                display: "flex", gap: 10, alignItems: "center",
+                background: "rgba(226,96,58,0.12)",
+                border: "1px solid rgba(226,96,58,0.2)",
+                borderRadius: 8, padding: "8px 12px",
+                marginTop: prevThoughts.length > 0 ? 3 : 0,
+              }}>
+                <span style={{
+                  width: 6, height: 6, borderRadius: "50%",
+                  background: "var(--accent)", flexShrink: 0,
+                  animation: "pulseDot 1.5s ease-in-out infinite",
+                }} />
+                <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.9)", fontWeight: 600, lineHeight: 1.4 }}>
+                  {latestThought}
                 </span>
-                <span style={{ fontSize: 11, fontWeight: 800, color: "var(--accent)" }}>{progress}%</span>
               </div>
-              {/* Progress bar styled as barcode stripes */}
-              <div style={{ display: "flex", gap: 2, height: 28, alignItems: "flex-end" }}>
-                {Array.from({ length: 40 }, (_, i) => {
-                  const filled = (i / 40) * 100 <= progress;
-                  const heights = [28, 18, 24, 14, 28, 20, 16, 28, 22, 12, 28, 18, 24, 28, 16, 20, 28, 14, 22, 28, 18, 28, 16, 24, 28, 20, 14, 28, 22, 18, 28, 16, 24, 28, 12, 20, 28, 18, 22, 28];
-                  return (
-                    <div key={i} style={{
-                      flex: 1, borderRadius: 1,
-                      height: heights[i % heights.length],
-                      background: filled ? "var(--navy)" : "rgba(0,0,0,0.08)",
-                      transition: "background 0.3s ease",
-                    }} />
-                  );
-                })}
-              </div>
+            )}
+          </div>
+
+          {/* Rotating travel tip (moved below status card) */}
+          <div style={{
+            marginTop: 16, minHeight: 32,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <div
+              key={tipIdx}
+              style={{
+                animation: "tipFade 5s ease-in-out forwards",
+                textAlign: "center",
+              }}
+            >
+              <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 12.5, lineHeight: 1.5, fontWeight: 500, letterSpacing: 0.3 }}>
+                {tips[tipIdx % tips.length]}
+              </span>
             </div>
           </div>
 
-          {/* Photo credit */}
-          <div style={{ textAlign: "center", marginTop: 10, color: "rgba(255,255,255,0.25)", fontSize: 10, letterSpacing: 1 }}>
+          {/* Credit */}
+          <div style={{ textAlign: "center", marginTop: 8, color: "rgba(255,255,255,0.2)", fontSize: 9, letterSpacing: 1 }}>
             PHOTOS VIA UNSPLASH
           </div>
         </div>
@@ -1173,7 +1243,7 @@ function ErrorScreen({ message, onReset }: { message: string; onReset: () => voi
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-type Screen = { kind: "input" } | { kind: "thinking"; thoughts: string[]; destination: string } | { kind: "itinerary"; plan: TripPlan } | { kind: "error"; message: string };
+type Screen = { kind: "input" } | { kind: "thinking"; thoughts: string[]; destination: string; tripType: string } | { kind: "itinerary"; plan: TripPlan } | { kind: "error"; message: string };
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>({ kind: "input" });
@@ -1187,7 +1257,8 @@ export default function Home() {
 
   async function handleSubmit(brief: string) {
     const destination = extractDestination(brief);
-    setScreen({ kind: "thinking", thoughts: ["Connecting…"], destination });
+    const tripType = extractTripType(brief);
+    setScreen({ kind: "thinking", thoughts: ["Connecting…"], destination, tripType });
 
     // POST /plan
     let planId: string;
@@ -1219,7 +1290,7 @@ export default function Home() {
 
     es.addEventListener("thought", (e) => {
       const { text } = JSON.parse((e as MessageEvent).data) as { text: string };
-      setScreen((s) => s.kind === "thinking" ? { kind: "thinking", thoughts: [...s.thoughts, text], destination: s.destination } : s);
+      setScreen((s) => s.kind === "thinking" ? { kind: "thinking", thoughts: [...s.thoughts, text], destination: s.destination, tripType: s.tripType } : s);
     });
 
     es.addEventListener("ready", (e) => {
@@ -1251,7 +1322,7 @@ export default function Home() {
   return (
     <>
       {screen.kind === "input" && <InputScreen onSubmit={handleSubmit} />}
-      {screen.kind === "thinking" && <ThinkingScreen thoughts={screen.thoughts} destination={screen.destination} />}
+      {screen.kind === "thinking" && <ThinkingScreen thoughts={screen.thoughts} destination={screen.destination} tripType={screen.tripType} />}
       {screen.kind === "itinerary" && <ItineraryScreen plan={screen.plan} onReset={reset} />}
       {screen.kind === "error" && <ErrorScreen message={screen.message} onReset={reset} />}
     </>
@@ -1263,25 +1334,37 @@ export default function Home() {
 // The intent stage refines everything from the free-form text anyway.
 
 function extractDestination(text: string): string {
-  const t = text.trim();
+  let t = text.trim();
 
-  // 1. After preposition: "in Paris", "to Bangkok", "visiting Rome"
-  const prepMatch = t.match(/(?:in|to|visit(?:ing)?|through|around|explore|exploring)\s+([A-Z][a-zA-Z\s]{1,28}?)(?:\s+(?:in|for|on|this|next|last|during|from)|[,.]|$)/i);
-  if (prepMatch?.[1]) return toTitleCase(prepMatch[1].trim());
+  // 0. Strip filler phrases that wrap around the real destination
+  //    e.g. "the area of Bavarian Alps" → "Bavarian Alps"
+  t = t.replace(/\b(?:the\s+)?(?:area|region|city|town|island|coast|countryside|part)\s+of\s+/gi, "");
+  t = t.replace(/\b(?:somewhere|someplace)\s+(?:in|near|around)\s+/gi, "");
 
-  // 2. Explicit "destination is X" or "trip to X"
-  const tripMatch = t.match(/(?:trip|travel|holiday|vacation|weekend|getaway)\s+(?:to|in)\s+([A-Za-z\s]{2,28}?)(?:[,.]|\s+(?:for|in|this)|$)/i);
-  if (tripMatch?.[1]) return toTitleCase(tripMatch[1].trim());
-
-  // 3. Capitalized proper nouns (original logic, improved)
-  const caps = t.match(/\b([A-Z][a-zA-Z]+(?:[\s-][A-Z][a-zA-Z]+)*)\b/);
-  if (caps?.[1] && !["I", "We", "My", "Our", "The", "A", "An"].includes(caps[1])) {
-    return caps[1].trim();
+  // 1. After preposition: "in Paris", "to Bangkok", "visiting the Bavarian Alps"
+  //    Now also strips leading articles ("the") from the match
+  const prepMatch = t.match(/(?:in|to|visit(?:ing)?|through|around|explore|exploring)\s+(?:the\s+)?([A-Z][a-zA-ZÀ-ÿ\s-]{1,32}?)(?:\s+(?:in|for|on|this|next|last|during|from|with|and|we|I)|[,.]|$)/i);
+  if (prepMatch?.[1]) {
+    const cleaned = prepMatch[1].replace(/\s+$/, "");
+    if (cleaned.length > 1) return toTitleCase(cleaned);
   }
 
-  // 4. First non-trivial word in title case as last resort
-  const firstWord = t.split(/\s+/).find((w) => w.length > 2);
-  return firstWord ? toTitleCase(firstWord) : "your destination";
+  // 2. Explicit "trip to X" / "holiday in X"
+  const tripMatch = t.match(/(?:trip|travel|holiday|vacation|weekend|getaway)\s+(?:to|in)\s+(?:the\s+)?([A-Za-zÀ-ÿ\s-]{2,32}?)(?:[,.]|\s+(?:for|in|this|with)|$)/i);
+  if (tripMatch?.[1]) return toTitleCase(tripMatch[1].trim());
+
+  // 3. Compound proper nouns: "Black Forest", "Costa Rica", "New Zealand"
+  const caps = t.match(/\b([A-Z][a-zA-ZÀ-ÿ]+(?:[\s-][A-Z][a-zA-ZÀ-ÿ]+){0,3})\b/);
+  if (caps?.[1]) {
+    const skip = new Set(["I", "We", "My", "Our", "The", "A", "An", "And", "But", "Or", "For", "So", "If"]);
+    if (!skip.has(caps[1])) return caps[1].trim();
+  }
+
+  // 4. Last resort — use a longer phrase if available
+  const words = t.split(/\s+/).filter((w) => w.length > 2);
+  if (words.length >= 2) return toTitleCase(words.slice(0, 3).join(" "));
+  if (words.length === 1) return toTitleCase(words[0]!);
+  return "Your Destination";
 }
 
 function toTitleCase(s: string): string {
