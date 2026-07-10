@@ -1,6 +1,6 @@
 /**
  * POST /plan    — validate CrucialInfo, start pipeline, return planId immediately.
- * GET /plan/:id/stream — SSE: thought events + plan-ready event.
+ * GET /plan/:id/stream — SSE: thought events + partial plans + plan-ready event.
  * GET /plan/:id — return the saved plan JSON.
  */
 import { randomUUID } from "crypto";
@@ -10,14 +10,21 @@ import { CrucialInfoSchema, type TripPlan } from "@travelmate/contracts";
 import { orchestrate } from "@travelmate/orchestrator";
 import { deps } from "../index.js";
 
-// Per-plan event bus bridging the pipeline callbacks → SSE connections
-const planBus = new Map<string, EventEmitter>();
+// Per-plan event bus bridging the pipeline callbacks → SSE connections.
+// latestPartial is kept so a client that connects late — or whose EventSource
+// silently RECONNECTS mid-generation — immediately receives the days already
+// generated instead of waiting blind until "ready".
+interface PlanChannel {
+  bus: EventEmitter;
+  latestPartial?: TripPlan;
+}
+const planBus = new Map<string, PlanChannel>();
 
-function getBus(planId: string): EventEmitter {
+function getChannel(planId: string): PlanChannel {
   if (!planBus.has(planId)) {
     const bus = new EventEmitter();
     bus.on("error", () => {}); // prevent unhandled error crash
-    planBus.set(planId, bus);
+    planBus.set(planId, { bus });
   }
   return planBus.get(planId)!;
 }
@@ -37,7 +44,8 @@ export async function planRoutes(app: FastifyInstance) {
     }
 
     const planId = randomUUID();
-    const bus = getBus(planId);
+    const channel = getChannel(planId);
+    const { bus } = channel;
 
     // Subscribe to DB observer before starting the pipeline so we never miss the notify
     const unsubscribe = deps.db.observer.subscribeToPlan(planId, (plan: TripPlan) => {
@@ -47,6 +55,10 @@ export async function planRoutes(app: FastifyInstance) {
     // Fire-and-forget: pipeline runs while client connects to SSE
     void orchestrate(info, deps, {
       onThought: (thought) => bus.emit("thought", thought),
+      onPartialPlan: (partial) => {
+        channel.latestPartial = partial;
+        bus.emit("partial", partial);
+      },
       onError: (err) => {
         bus.emit("error", err.message);
         unsubscribe();
@@ -63,7 +75,8 @@ export async function planRoutes(app: FastifyInstance) {
   // GET /plan/:id/stream — SSE
   app.get<{ Params: { id: string } }>("/plan/:id/stream", (request, reply) => {
     const { id } = request.params;
-    const bus = getBus(id);
+    const channel = getChannel(id);
+    const { bus } = channel;
 
     reply.raw.setHeader("Content-Type", "text/event-stream");
     reply.raw.setHeader("Cache-Control", "no-cache");
@@ -78,6 +91,7 @@ export async function planRoutes(app: FastifyInstance) {
     reply.raw.flushHeaders?.();
 
     const onThought = (thought: string) => sseWrite(reply, "thought", { text: thought });
+    const onPartial = (plan: TripPlan) => sseWrite(reply, "partial", plan);
     const onReady = (plan: TripPlan) => {
       sseWrite(reply, "ready", plan);
       cleanup();
@@ -91,13 +105,21 @@ export async function planRoutes(app: FastifyInstance) {
 
     function cleanup() {
       bus.off("thought", onThought);
+      bus.off("partial", onPartial);
       bus.off("ready", onReady);
       bus.off("error", onError);
     }
 
     bus.on("thought", onThought);
+    bus.on("partial", onPartial);
     bus.on("ready", onReady);
     bus.on("error", onError);
+
+    // Replay: a late or RECONNECTING client immediately gets the days that are
+    // already generated — it never waits blind while "day 2" is being written.
+    if (channel.latestPartial) {
+      sseWrite(reply, "partial", channel.latestPartial);
+    }
 
     request.raw.on("close", cleanup);
 
