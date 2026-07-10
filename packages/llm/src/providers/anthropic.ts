@@ -35,7 +35,7 @@ export const anthropicProvider: LLMProvider = {
 
     const response = await client.messages.create({
       model: modelId,
-      max_tokens: req.stage === "synthesis" ? 16000 : 4096,
+      max_tokens: req.stage === "synthesis" ? 8000 : 4096,
       system: systemBlocks as Anthropic.TextBlockParam[],
       messages: [{ role: "user", content: req.user }],
     });
