@@ -1290,7 +1290,20 @@ export default function Home() {
 
     es.addEventListener("thought", (e) => {
       const { text } = JSON.parse((e as MessageEvent).data) as { text: string };
-      setScreen((s) => s.kind === "thinking" ? { kind: "thinking", thoughts: [...s.thoughts, text], destination: s.destination, tripType: s.tripType } : s);
+      
+      // If the backend LLM announces the exact destination, capture it to correct the UI title!
+      let parsedDestination: string | undefined;
+      const match = text.match(/itinerary for (.*?)…/i);
+      if (match && match[1]) {
+        parsedDestination = match[1];
+      }
+
+      setScreen((s) => s.kind === "thinking" ? { 
+        kind: "thinking", 
+        thoughts: [...s.thoughts, text], 
+        destination: parsedDestination ?? s.destination, 
+        tripType: s.tripType 
+      } : s);
     });
 
     es.addEventListener("ready", (e) => {
@@ -1360,10 +1373,7 @@ function extractDestination(text: string): string {
     if (!skip.has(caps[1])) return caps[1].trim();
   }
 
-  // 4. Last resort — use a longer phrase if available
-  const words = t.split(/\s+/).filter((w) => w.length > 2);
-  if (words.length >= 2) return toTitleCase(words.slice(0, 3).join(" "));
-  if (words.length === 1) return toTitleCase(words[0]!);
+  // 4. Last resort
   return "Your Destination";
 }
 
