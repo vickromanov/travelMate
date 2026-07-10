@@ -959,12 +959,20 @@ const HERO_PHOTOS: Record<string, string> = {
 };
 
 function dayPhotoUrl(day: DayPlan, planTitle: string, dayIndex: number): string {
-  // Extract keywords from the plan title to get the destination (e.g. "Achensee Trip" -> "achensee,trip")
-  const keywords = planTitle.replace(/[^a-zA-Z0-9]+/g, ",").toLowerCase();
-  
-  // Use loremflickr to dynamically fetch an image matching the destination keywords.
-  // We include 'landscape' to ensure the photo is scenic.
-  return `https://loremflickr.com/1920/1080/landscape,${keywords}/all?lock=${dayIndex}`;
+  const activity = day.blocks.find((b) => b.category === "ACTIVITIES");
+  const searchText = [
+    activity?.options[0]?.title ?? "",
+    day.theme ?? "",
+    planTitle,
+  ].join(" ").toLowerCase();
+
+  const keywords = Object.keys(HERO_PHOTOS).filter((k) => !k.startsWith("default"));
+  const match = keywords.find((k) => searchText.includes(k));
+  const photoId = match
+    ? HERO_PHOTOS[match]!
+    : HERO_PHOTOS[`default${dayIndex % 5}`]!;
+
+  return `https://images.unsplash.com/${photoId}?w=1920&q=85&fit=crop`;
 }
 
 function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onReset: () => void }) {
