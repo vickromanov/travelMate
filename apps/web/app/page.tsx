@@ -493,30 +493,6 @@ function ThinkingScreen({ thoughts, destination, tripType }: { thoughts: string[
           }}>
             {tripLabel}
           </p>
-
-          {/* Rotating travel tip */}
-          <div style={{
-            marginTop: 28, minHeight: 48,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <div
-              key={tipIdx}
-              style={{
-                background: "rgba(255,255,255,0.08)",
-                backdropFilter: "blur(20px)",
-                WebkitBackdropFilter: "blur(20px)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                borderRadius: 12,
-                padding: "10px 20px",
-                maxWidth: 480,
-                animation: "tipFade 5s ease-in-out forwards",
-              }}
-            >
-              <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 13.5, lineHeight: 1.5, fontWeight: 500 }}>
-                {tips[tipIdx % tips.length]}
-              </span>
-            </div>
-          </div>
         </div>
 
         {/* Bottom panel — progress + status card */}
@@ -593,8 +569,26 @@ function ThinkingScreen({ thoughts, destination, tripType }: { thoughts: string[
             )}
           </div>
 
+          {/* Rotating travel tip (moved below status card) */}
+          <div style={{
+            marginTop: 16, minHeight: 32,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <div
+              key={tipIdx}
+              style={{
+                animation: "tipFade 5s ease-in-out forwards",
+                textAlign: "center",
+              }}
+            >
+              <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 12.5, lineHeight: 1.5, fontWeight: 500, letterSpacing: 0.3 }}>
+                {tips[tipIdx % tips.length]}
+              </span>
+            </div>
+          </div>
+
           {/* Credit */}
-          <div style={{ textAlign: "center", marginTop: 10, color: "rgba(255,255,255,0.2)", fontSize: 9, letterSpacing: 1 }}>
+          <div style={{ textAlign: "center", marginTop: 8, color: "rgba(255,255,255,0.2)", fontSize: 9, letterSpacing: 1 }}>
             PHOTOS VIA UNSPLASH
           </div>
         </div>
