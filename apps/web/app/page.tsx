@@ -527,9 +527,98 @@ function ThinkingScreen({ thoughts, destination }: { thoughts: string[]; destina
   );
 }
 
+// Helper components for Google Maps and Booking.com logos/links
+function GoogleMapsLogo({ opt }: { opt: TravelOption }) {
+  const query = encodeURIComponent(`${opt.title} ${opt.location.address || ""}`);
+  // If opt.link is already a Google Maps link, use it. Otherwise construct search URL.
+  const isMapsLink = opt.link && (opt.link.includes("google.com/maps") || opt.link.includes("maps.google.com") || opt.link.includes("maps.app.goo.gl"));
+  const mapsUrl = isMapsLink ? opt.link : `https://www.google.com/maps/search/?api=1&query=${query}`;
+
+  return (
+    <a
+      href={mapsUrl}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "3px",
+        borderRadius: "4px",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        cursor: "pointer",
+        transition: "transform 0.2s, box-shadow 0.2s",
+        boxShadow: "var(--shadow-sm)",
+        flexShrink: 0,
+      }}
+      title="View on Google Maps"
+      onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.15)"; e.currentTarget.style.boxShadow = "var(--shadow-md)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "var(--shadow-sm)"; }}
+    >
+      <svg viewBox="0 0 24 24" width="13" height="13" style={{ display: "block" }}>
+        <path d="M12 2C7.58 2 4 5.58 4 10c0 5.25 8 12 8 12s8-6.75 8-12c0-4.42-3.58-8-8-8zm0 11c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" fill="#4285F4" />
+        <path d="M12 2C7.58 2 4 5.58 4 10c0 1 .19 1.95.53 2.82L12 4.12V2z" fill="#EA4335" />
+        <path d="M12 22s8-6.75 8-12c0-1-.19-1.95-.53-2.82L12 19.88V22z" fill="#34A853" />
+        <path d="M12 13c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" fill="#FBBC05" />
+      </svg>
+    </a>
+  );
+}
+
+function BookingLogo({ opt }: { opt: TravelOption }) {
+  const query = encodeURIComponent(opt.title);
+  const bookingUrl = opt.bookingUrl || `https://www.booking.com/searchresults.html?ss=${query}`;
+
+  return (
+    <a
+      href={bookingUrl}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "3px",
+        borderRadius: "4px",
+        background: "#003580",
+        border: "1px solid #00224f",
+        cursor: "pointer",
+        transition: "transform 0.2s, box-shadow 0.2s",
+        boxShadow: "var(--shadow-sm)",
+        flexShrink: 0,
+      }}
+      title="Book on Booking.com"
+      onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.15)"; e.currentTarget.style.boxShadow = "var(--shadow-md)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "var(--shadow-sm)"; }}
+    >
+      <svg viewBox="0 0 24 24" width="13" height="13" style={{ display: "block" }}>
+        <rect width="24" height="24" rx="4" fill="#003580" />
+        <text x="5" y="18" fill="#ffffff" fontSize="16" fontWeight="bold" fontFamily="system-ui, sans-serif">B</text>
+      </svg>
+    </a>
+  );
+}
+
+function LocationLogos({ opt, category }: { opt: TravelOption; category: string }) {
+  const hasMap = category !== "TRANSPORT" && category !== "LOGISTICS";
+  const isHotel = category === "STAYS";
+
+  if (!hasMap) return null;
+
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginLeft: 6, verticalAlign: "middle", flexShrink: 0 }}>
+      <GoogleMapsLogo opt={opt} />
+      {isHotel && <BookingLogo opt={opt} />}
+    </div>
+  );
+}
+
 // ── Option card ───────────────────────────────────────────────────────────────
 
-function OptionCard({ opt, selected, onSelect }: { opt: TravelOption; selected: boolean; onSelect: () => void }) {
+function OptionCard({ opt, selected, onSelect, category }: { opt: TravelOption; selected: boolean; onSelect: () => void; category: string }) {
   const [open, setOpen] = useState(false);
   const tier = TIER_META[opt.tier] ?? { label: opt.tier, color: "var(--ink-soft)", soft: "var(--bg-soft)" };
 
@@ -565,18 +654,21 @@ function OptionCard({ opt, selected, onSelect }: { opt: TravelOption; selected: 
           >
             {tier.label}
           </span>
-          <a
-            href={opt.link ?? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(opt.title + " " + opt.location.address)}`}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              fontWeight: selected ? 650 : 500, fontSize: 14, color: "var(--ink)",
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}
-          >
-            {opt.title} <span style={{ color: "var(--teal)", fontSize: 12 }}>↗</span>
-          </a>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, overflow: "hidden" }}>
+            <a
+              href={opt.link ?? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(opt.title + " " + opt.location.address)}`}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                fontWeight: selected ? 650 : 500, fontSize: 14, color: "var(--ink)",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}
+            >
+              {opt.title} <span style={{ color: "var(--teal)", fontSize: 12 }}>↗</span>
+            </a>
+            <LocationLogos opt={opt} category={category} />
+          </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <span style={{ color: "var(--ink-soft)", fontSize: 13.5, fontWeight: 600 }}>
@@ -673,12 +765,16 @@ function TimelineBlock({ block, isLast, onSwap }: { block: Block; isLast: boolea
                 {cat.label}
               </span>
             </div>
-            <div style={{ fontWeight: 650, fontSize: 15, color: "var(--ink)", lineHeight: 1.35 }}>
-              {block.label ?? selected?.title ?? block.category}
+            <div style={{ fontWeight: 650, fontSize: 15, color: "var(--ink)", lineHeight: 1.35, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span>{block.label ?? selected?.title ?? block.category}</span>
+              {!block.label && selected && (
+                <LocationLogos opt={selected} category={block.category} />
+              )}
             </div>
-            {selected && (
-              <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {selected.title}
+            {selected && block.label && (
+              <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selected.title}</span>
+                <LocationLogos opt={selected} category={block.category} />
               </div>
             )}
           </div>
@@ -706,7 +802,7 @@ function TimelineBlock({ block, isLast, onSwap }: { block: Block; isLast: boolea
               {block.options.length} swappable options
             </p>
             {block.options.map((opt) => (
-              <OptionCard key={opt.id} opt={opt} selected={opt.id === block.selectedOptionId} onSelect={() => onSwap(block.blockId, opt.id)} />
+              <OptionCard key={opt.id} opt={opt} selected={opt.id === block.selectedOptionId} onSelect={() => onSwap(block.blockId, opt.id)} category={block.category} />
             ))}
           </div>
         )}
