@@ -204,8 +204,9 @@ describe("reflow — activity swap (attached transports)", () => {
 
     const b3 = result.plan.days[0]!.blocks[2]!;
     const link = b3.options[0]!.link!;
-    expect(link).toContain("destination=Deutsches%20Museum");
+    expect(link).toMatch(/destination=Deutsches[+%20]Museum/);
     expect(link).toContain("travelmode=transit"); // old mode preserved
+    expect(link).toContain("departure_time="); // date-stamped
     expect(b3.options[0]!.linkType).toBe("DIRECTIONS");
     // untouched blocks stay untouched
     expect(result.changedBlockIds).not.toContain("d1_b6");

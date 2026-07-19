@@ -49,6 +49,17 @@ function timeToMinutes(t: string): number | null {
   return parseInt(m[1]!, 10) * 60 + parseInt(m[2]!, 10);
 }
 
+function minutesToTime(m: number): string {
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+function parseEarliestOpen(hours: string | undefined): number | null {
+  if (!hours) return null;
+  const m = hours.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  return parseInt(m[1]!, 10) * 60 + parseInt(m[2]!, 10);
+}
+
 function addDaysISO(dateStr: string, n: number): string {
   const d = new Date(dateStr + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + n);
@@ -162,6 +173,21 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
         err("chronological-order", `${where}, block ${b.blockId}`, `scheduledTime ${b.scheduledTime} is earlier than the previous block`, day.dayNumber);
       }
       prev = t;
+    }
+
+    // Scheduled-time vs opening-hours mismatch (the "arrive before it opens" bug)
+    for (const b of day.blocks) {
+      if (b.category === "STAYS" || b.category === "TRANSPORT") continue;
+      const scheduled = timeToMinutes(b.scheduledTime);
+      if (scheduled === null) continue;
+      for (const o of b.options) {
+        const opens = parseEarliestOpen(o.openingHours);
+        if (opens !== null && scheduled < opens) {
+          warn("before-opening", `${where}, block ${b.blockId}`,
+            `option "${o.title}" opens at ${minutesToTime(opens)} but is scheduled at ${b.scheduledTime}`,
+            day.dayNumber);
+        }
+      }
     }
 
     // Per-block invariants

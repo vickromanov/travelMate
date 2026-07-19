@@ -26,7 +26,7 @@ import { ItineraryBlockSchema } from "@travelmate/contracts";
 import type { Database } from "@travelmate/database";
 import type { LLMClient } from "@travelmate/llm";
 import { verifyDayLinks, mapsSearchUrl } from "./verify-links.js";
-import { enforceConsistency } from "./consistency.js";
+import { enforceConsistency, departureEpoch } from "./consistency.js";
 
 export interface ReflowResult {
   plan: TripPlan;
@@ -60,10 +60,17 @@ function mentionsVenue(opt: TravelOption, name: string): boolean {
     (!!opt.link && re.test(decodeURIComponent(opt.link).replace(/\+/g, " ")));
 }
 
-/** Rebuild a Google Maps directions link, keeping the old travel mode. */
-function rebuildDirectionsLink(oldLink: string | undefined, from: string, to: string): string {
+/** Rebuild a Google Maps directions link, keeping the old travel mode and stamping departure_time. */
+function rebuildDirectionsLink(oldLink: string | undefined, from: string, to: string, dayDate?: string, scheduledTime?: string): string {
   const mode = oldLink?.match(/travelmode=(walking|transit|driving|bicycling)/i)?.[1] ?? "transit";
-  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}&travelmode=${mode}`;
+  const u = new URL(`https://www.google.com/maps/dir/?api=1`);
+  u.searchParams.set("origin", from);
+  u.searchParams.set("destination", to);
+  u.searchParams.set("travelmode", mode);
+  if (dayDate && scheduledTime) {
+    u.searchParams.set("departure_time", String(departureEpoch(dayDate, scheduledTime)));
+  }
+  return u.toString();
 }
 
 /* ── Dependency derivation ─────────────────────────────────────────────────── */
@@ -170,7 +177,7 @@ async function reresolveTransports(
   const prompt = `These TRANSPORT blocks must be re-resolved because a venue they connect to changed.
 For each: keep blockId, scheduledTime, dependencyLogic and the 4-option structure, but recompute
 the route between the NEW endpoints — realistic mode, duration, total party cost, and a Google Maps
-directions link "https://www.google.com/maps/dir/?api=1&origin=FROM&destination=TO&travelmode=MODE".
+directions link "https://www.google.com/maps/dir/?api=1&origin=FROM&destination=TO&travelmode=MODE&departure_time=EPOCH" (EPOCH = Unix seconds for the day+time).
 
 ${jobs.map((j) => `- blockId "${j.block.blockId}": now FROM "${j.from}" TO "${j.to}" at ${j.block.scheduledTime}
   current JSON: ${JSON.stringify(j.block)}`).join("\n")}
@@ -275,7 +282,7 @@ export async function reflow(
         for (const opt of job.block.options) {
           opt.title = patchNames(opt.title, oldOption.title, newOption.title);
           opt.description = patchNames(opt.description, oldOption.title, newOption.title);
-          opt.link = rebuildDirectionsLink(opt.link, job.from, job.to);
+          opt.link = rebuildDirectionsLink(opt.link, job.from, job.to, job.day.date, job.block.scheduledTime);
           opt.linkType = "DIRECTIONS";
         }
         if (job.block.label) job.block.label = patchNames(job.block.label, oldOption.title, newOption.title);

@@ -247,6 +247,7 @@ EVERY option must have:
         EXACT venue names, linkType "DIRECTIONS":
         "https://www.google.com/maps/dir/?api=1&origin=EXACT+FROM+NAME+CITY&destination=EXACT+TO+NAME+CITY&travelmode=MODE"
         (MODE: walking, transit, driving or bicycling — never generic names)
+        Do NOT add departure_time to the URL — the system stamps it automatically.
 
   - BOOKING & TICKETS — make purchasing EFFORTLESS (H3). For every option where the
     traveler must or should book/buy in advance (museums with timed entry, tours,
@@ -320,6 +321,36 @@ the price you show must reflect that. Period.
 scheduledTime must progress realistically through the day.
 Add 20-30 min buffer between morning→afternoon, afternoon→evening.
 TRANSPORT options: include mode of transport, duration, and from/to place names.
+
+=== DAY-OF-WEEK & SEASONAL AVAILABILITY — CRITICAL ===
+Every option you propose MUST actually be available on its scheduled day and time.
+Before placing ANY option (activity, restaurant, museum, market, tour, shop, etc.):
+
+1. CHECK THE DAY OF WEEK — many venues close on specific days:
+   - Museums often close Mondays (Louvre, Pinakothek, Prado, …)
+   - Restaurants may close Sundays or Mondays
+   - Markets run only on specific weekday(s) — e.g. "Saturday market" must not appear on a Tuesday
+   - Religious sites may restrict tourist access on worship days
+   If a venue is CLOSED on the scheduled day, DO NOT include it. Pick an alternative
+   that IS open on that specific day of the week.
+
+2. CHECK SEASONAL AVAILABILITY — some experiences are seasonal:
+   - Christmas markets (late Nov–Dec only), beer gardens (Apr–Oct in many regions),
+     outdoor pools, ski lifts, whale watching, cherry blossoms, etc.
+   - If the trip dates fall outside an attraction's operating season, DO NOT include it.
+
+3. CHECK TIME-OF-DAY FIT — respect actual opening and closing hours:
+   - A museum that opens at 10:00 must not be scheduled at 08:30
+   - A restaurant serving only dinner must not be a lunch option
+   - Last-entry cutoffs matter — if last entry is 16:00, a 16:30 arrival does not work
+
+4. STATE HOURS — for DINING and ACTIVITIES, the "openingHours" field must reflect
+   the ACTUAL hours for the specific day of the week the option is scheduled on,
+   not generic "Mon-Sun" ranges. If Monday hours differ from Sunday hours, show
+   the correct ones for that day.
+
+Getting this wrong ruins the traveler's day. A "must-visit museum" that is closed
+when they arrive is worse than never suggesting it. When in doubt, leave it out.
 `;
 
 export function computeNumDays(brief: TripBrief): { numDays: number; start: string } {
