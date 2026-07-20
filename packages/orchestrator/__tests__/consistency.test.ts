@@ -114,12 +114,18 @@ describe("enforceConsistency — transport link mode", () => {
     expect(o.link).toContain("travelmode=walking");
   });
 
-  it("keeps transit for a train option", () => {
+  it("keeps transit for a train option (stamps departure_time only)", () => {
     const o = opt({ title: "Regional Train (BRB)", description: "Direct train", link: dirLink("transit"), linkType: "DIRECTIONS" });
     const plan = planWith(block("TRANSPORT", [o]));
     const report = enforceConsistency(plan);
-    expect(report.fixed).toBe(0);
+    expect(report.fixed).toBe(1); // departure_time stamped, mode unchanged
     expect(o.link).toContain("travelmode=transit");
+    expect(o.link).toContain("departure_time=");
+    // departure_time must land on the same weekday as the day's date
+    const epoch = parseInt(o.link!.match(/departure_time=(\d+)/)![1]!, 10);
+    const proxyDow = new Date(epoch * 1000).getUTCDay();
+    const tripDow = new Date("2026-07-10T00:00:00Z").getUTCDay();
+    expect(proxyDow).toBe(tripDow);
   });
 
   it("does not touch a directions link missing its endpoints", () => {

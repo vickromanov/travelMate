@@ -1,6 +1,8 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import type { Money, TravelOption, Block, DayPlan, TripPlan } from "../src/lib/plan-types";
+import { linkActionLabel, bookingActionLabel, isFreeWalkIn } from "../src/lib/plan-types";
+import { mergePlans, totalDaysOf } from "../src/lib/merge-plan";
 import { downloadItineraryPdf } from "../src/pdf/export-pdf";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
@@ -85,7 +87,7 @@ const TIER_META: Record<string, { label: string; color: string; soft: string }> 
 };
 
 function fmtMoney(m: Money): string {
-  return m.amount > 0 ? `${m.currency} ${m.amount.toLocaleString()}` : "Free";
+  return m.amount > 0 ? `~${m.currency} ${m.amount.toLocaleString()}` : "Free";
 }
 
 function fmtDate(iso: string, opts: Intl.DateTimeFormatOptions): string {
@@ -107,6 +109,21 @@ const EXAMPLES = [
 
 function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
   const [text, setText] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  function useTemplate(ex: string) {
+    setText(ex);
+    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    cardRef.current?.classList.remove("flash-updated");
+    void cardRef.current?.offsetWidth;
+    cardRef.current?.classList.add("flash-updated");
+    const ta = textareaRef.current;
+    if (ta) {
+      ta.focus({ preventScroll: true });
+      ta.setSelectionRange(ex.length, ex.length);
+    }
+  }
 
   return (
     <div style={{ maxWidth: 760, margin: "0 auto", padding: "72px 24px" }}>
@@ -123,8 +140,9 @@ function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
         </p>
       </div>
 
-      <div className="card" style={{ padding: 8, boxShadow: "var(--shadow-lg)", animation: "fadeUp 0.5s ease 0.08s backwards" }}>
+      <div ref={cardRef} className="card" style={{ padding: 8, boxShadow: "var(--shadow-lg)", animation: "fadeUp 0.5s ease 0.08s backwards" }}>
         <textarea
+          ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Who's going, where, when, what kind of trip — tell me everything…"
@@ -157,8 +175,9 @@ function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {EXAMPLES.map((ex) => (
-            <button key={ex} className="example-chip" onClick={() => setText(ex)} style={{ padding: "11px 16px" }}>
-              {ex}
+            <button key={ex} className="example-chip" onClick={() => useTemplate(ex)} style={{ padding: "11px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <span>{ex}</span>
+              <span style={{ color: "var(--teal)", fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0, fontSize: 12.5 }}>Use ↑</span>
             </button>
           ))}
         </div>
@@ -167,7 +186,7 @@ function InputScreen({ onSubmit }: { onSubmit: (brief: string) => void }) {
   );
 }
 
-// ── Thinking screen ───────────────────────────────────────────────────────────
+// ── Thinking screen (immersive — PR#10) ───────────────────────────────────────
 
 // Curated HQ Unsplash travel photos (ambient background)
 const TRAVEL_PHOTOS: string[] = [
@@ -302,7 +321,7 @@ function estimateProgress(thoughts: string[]): number {
   if (last.includes("trip profile ready")) return 26;
   if (last.includes("composing your")) return 32;
   if (last.includes("writing a")) return 37;
-  const dayMatch = last.match(/generating day[s]?\s+(\d+)[–\-]?(\d+)?\s+of\s+(\d+)/);
+  const dayMatch = last.match(/(?:writing|generating) day[s]?\s+(\d+)[–\-]?(\d+)?\s+of\s+(\d+)/);
   if (dayMatch) {
     const current = parseInt(dayMatch[2] ?? dayMatch[1]!, 10);
     const total = parseInt(dayMatch[3]!, 10);
@@ -310,6 +329,8 @@ function estimateProgress(thoughts: string[]): number {
   }
   if (last.includes("all days generated") || last.includes("validating")) return 92;
   if (last.includes("quality")) return 95;
+  if (last.includes("link check")) return 97;
+  if (last.includes("reconciled")) return 96;
   if (last.includes("plan ready")) return 100;
   if (thoughts.length > 1) return Math.min(35, thoughts.length * 5);
   return 3;
@@ -429,7 +450,6 @@ function ThinkingScreen({ thoughts, destination, tripType }: { thoughts: string[
         }}
       />
 
-      {/* Gradient overlays */}
       <div style={{
         position: "absolute", inset: 0, zIndex: 2,
         background: "linear-gradient(to bottom, rgba(8,18,40,0.6) 0%, rgba(8,18,40,0.25) 30%, rgba(8,18,40,0.45) 60%, rgba(8,18,40,0.95) 100%)",
@@ -442,7 +462,6 @@ function ThinkingScreen({ thoughts, destination, tripType }: { thoughts: string[
         maxHeight: "100vh",
       }}>
 
-        {/* Top bar */}
         <div style={{
           padding: "20px 28px",
           display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -477,7 +496,6 @@ function ThinkingScreen({ thoughts, destination, tripType }: { thoughts: string[
             ✈
           </div>
 
-          {/* Destination */}
           <h1 style={{
             fontFamily: "var(--font-display-stack)",
             fontSize: "clamp(36px, 7vw, 72px)",
@@ -688,7 +706,7 @@ function LocationLogos({ opt, category }: { opt: TravelOption; category: string 
 
 // ── Option card ───────────────────────────────────────────────────────────────
 
-function OptionCard({ opt, selected, onSelect, category }: { opt: TravelOption; selected: boolean; onSelect: () => void; category: string }) {
+function OptionCard({ opt, category, selected, onSelect }: { opt: TravelOption; category: string; selected: boolean; onSelect: () => void }) {
   const [open, setOpen] = useState(false);
   const tier = TIER_META[opt.tier] ?? { label: opt.tier, color: "var(--ink-soft)", soft: "var(--bg-soft)" };
 
@@ -777,10 +795,84 @@ function OptionCard({ opt, selected, onSelect, category }: { opt: TravelOption; 
             {opt.openingHours && <span>🕐 {opt.openingHours}</span>}
             {opt.phoneNumber && <span>📞 {opt.phoneNumber}</span>}
           </div>
-          {opt.bookingUrl && (
-            <a href={opt.bookingUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600 }}>
-              Book now →
-            </a>
+
+          {(opt.accessNotes || category === "ACTIVITIES" || category === "LOGISTICS") && (
+            <div style={{
+              display: "flex", gap: 8, alignItems: "flex-start",
+              fontSize: 12.5, color: "var(--ink)",
+              background: "var(--cat-transport-soft)",
+              border: "1px solid var(--cat-transport-soft)",
+              borderRadius: 8, padding: "8px 12px",
+            }}>
+              <span style={{ flexShrink: 0 }}>🚶</span>
+              <span style={{ minWidth: 0 }}>
+                <strong style={{ color: "var(--cat-transport)" }}>Getting there:&nbsp;</strong>
+                {opt.accessNotes || "Walk-in — accessible on foot from your previous stop."}
+              </span>
+            </div>
+          )}
+
+          {(["DINING", "ACTIVITIES", "STAYS", "LOGISTICS"].includes(category) ||
+            opt.bookingRequired || opt.bookingUrl || opt.priceDetail || opt.bookingAdvice) && (
+            <div style={{
+              border: "1px solid var(--border)", borderRadius: 8,
+              padding: "10px 12px", background: "var(--bg-soft)",
+              display: "flex", flexDirection: "column", gap: 6,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", color: "var(--ink-soft)" }}>
+                  🎟 Booking & tickets
+                </span>
+                {opt.bookingUrl && (
+                  <a
+                    href={opt.bookingUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      fontSize: 12.5, fontWeight: 700, color: "#fff",
+                      background: "var(--teal)", padding: "5px 14px",
+                      borderRadius: 999, whiteSpace: "nowrap", textDecoration: "none",
+                    }}
+                  >
+                    {bookingActionLabel(category)} →
+                  </a>
+                )}
+              </div>
+
+              {!opt.bookingUrl && (opt.bookingRequired || opt.price.amount > 0) && opt.phoneNumber && (
+                <span style={{ fontSize: 12.5, color: "var(--ink)", fontWeight: 600 }}>
+                  📞 Booking required — call{" "}
+                  <a href={`tel:${opt.phoneNumber.replace(/[\s/-]+/g, "")}`} style={{ fontWeight: 700 }}>
+                    {opt.phoneNumber}
+                  </a>
+                </span>
+              )}
+              {!opt.bookingUrl && (opt.bookingRequired || opt.price.amount > 0) && !opt.phoneNumber && (
+                <span style={{ fontSize: 12.5, color: "var(--ink)", fontWeight: 600 }}>
+                  🎟 Ticket required — buy on site or via the link above
+                </span>
+              )}
+              {isFreeWalkIn(opt) && (
+                <span style={{ fontSize: 12.5, color: "var(--cat-activities)", fontWeight: 600 }}>
+                  ✓ Free — no booking or tickets needed, just walk in
+                </span>
+              )}
+
+              {opt.priceDetail && (
+                <span style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>💶 {opt.priceDetail}</span>
+              )}
+              {opt.bookingAdvice && (
+                <span style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>ℹ️ {opt.bookingAdvice}</span>
+              )}
+            </div>
+          )}
+
+          {opt.link && (
+            <div style={{ marginTop: 2 }}>
+              <a href={opt.link} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600 }}>
+                {linkActionLabel(opt)} →
+              </a>
+            </div>
           )}
         </div>
       )}
@@ -790,7 +882,12 @@ function OptionCard({ opt, selected, onSelect, category }: { opt: TravelOption; 
 
 // ── Timeline block ────────────────────────────────────────────────────────────
 
-function TimelineBlock({ block, isLast, onSwap }: { block: Block; isLast: boolean; onSwap: (blockId: string, optionId: string) => void }) {
+function TimelineBlock({ block, isLast, onSwap, flash = false }: {
+  block: Block;
+  isLast: boolean;
+  onSwap: (blockId: string, optionId: string) => void;
+  flash?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const selected = block.options.find((o) => o.id === block.selectedOptionId) ?? block.options[0];
   const cat = catMeta(block.category);
@@ -818,7 +915,7 @@ function TimelineBlock({ block, isLast, onSwap }: { block: Block; isLast: boolea
       </div>
 
       {/* Card */}
-      <div className="card" style={{ marginBottom: 14, overflow: "hidden" }}>
+      <div className={`card${flash ? " flash-updated" : ""}`} style={{ marginBottom: 14, overflow: "hidden" }}>
         <button
           onClick={() => setExpanded(!expanded)}
           style={{
@@ -872,7 +969,7 @@ function TimelineBlock({ block, isLast, onSwap }: { block: Block; isLast: boolea
               {block.options.length} swappable options
             </p>
             {block.options.map((opt) => (
-              <OptionCard key={opt.id} opt={opt} selected={opt.id === block.selectedOptionId} onSelect={() => onSwap(block.blockId, opt.id)} category={block.category} />
+              <OptionCard key={opt.id} opt={opt} category={block.category} selected={opt.id === block.selectedOptionId} onSelect={() => onSwap(block.blockId, opt.id)} />
             ))}
           </div>
         )}
@@ -883,7 +980,11 @@ function TimelineBlock({ block, isLast, onSwap }: { block: Block; isLast: boolea
 
 // ── Day view ──────────────────────────────────────────────────────────────────
 
-function DayView({ day, onSwap }: { day: DayPlan; onSwap: (blockId: string, optionId: string) => void }) {
+function DayView({ day, onSwap, flashIds }: {
+  day: DayPlan;
+  onSwap: (blockId: string, optionId: string) => void;
+  flashIds?: ReadonlySet<string>;
+}) {
   const dayTotal = day.blocks.reduce((sum, b) => {
     const sel = b.options.find((o) => o.id === b.selectedOptionId) ?? b.options[0];
     return sum + (sel?.price.amount ?? 0);
@@ -922,34 +1023,33 @@ function DayView({ day, onSwap }: { day: DayPlan; onSwap: (blockId: string, opti
 
       <div>
         {day.blocks.map((b, i) => (
-          <TimelineBlock key={b.blockId} block={b} isLast={i === day.blocks.length - 1} onSwap={onSwap} />
+          <TimelineBlock key={b.blockId} block={b} isLast={i === day.blocks.length - 1} onSwap={onSwap} flash={flashIds?.has(b.blockId) ?? false} />
         ))}
       </div>
     </div>
   );
 }
 
-// ── Itinerary screen ──────────────────────────────────────────────────────────
+// ── Itinerary screen (PR#10 hero + progressive rendering) ────────────────────
 
-// Curated hero photos for itinerary screen — keyed by vibe/keyword
 const HERO_PHOTOS: Record<string, string> = {
-  forest:    "photo-1448375240586-882707db888b", // misty forest
-  nature:    "photo-1476514525535-07fb3b4ae5f1", // mountain lake
-  mountain:  "photo-1464822759023-fed622ff2c3b", // mountain peak
-  spa:       "photo-1571019613454-1cb2f99b2d8b", // spa relaxation
-  beach:     "photo-1506929562872-bb421503ef21", // tropical beach
-  city:      "photo-1477959858617-67f85cf4f1df", // city skyline
-  paris:     "photo-1499856871958-5b9627545d1a", // Eiffel Tower
-  rome:      "photo-1552832230-c0197dd311b5", // Colosseum
-  japan:     "photo-1543158181-e6f9f6712055", // Tokyo
-  venice:    "photo-1523906834658-6e24ef2386f9", // Venice canal
-  greece:    "photo-1513581166391-887a96ddeafd", // Santorini
-  food:      "photo-1414235077428-338989a2e8c0", // fine dining
+  forest:    "photo-1448375240586-882707db888b",
+  nature:    "photo-1476514525535-07fb3b4ae5f1",
+  mountain:  "photo-1464822759023-fed622ff2c3b",
+  spa:       "photo-1571019613454-1cb2f99b2d8b",
+  beach:     "photo-1506929562872-bb421503ef21",
+  city:      "photo-1477959858617-67f85cf4f1df",
+  paris:     "photo-1499856871958-5b9627545d1a",
+  rome:      "photo-1552832230-c0197dd311b5",
+  japan:     "photo-1543158181-e6f9f6712055",
+  venice:    "photo-1523906834658-6e24ef2386f9",
+  greece:    "photo-1513581166391-887a96ddeafd",
+  food:      "photo-1414235077428-338989a2e8c0",
   dining:    "photo-1414235077428-338989a2e8c0",
-  desert:    "photo-1509316785289-025f5b846b35", // desert dunes
-  road:      "photo-1469854523086-cc02fe5d8800", // road trip
-  adventure: "photo-1530789253388-582c481c54b0", // canyon
-  culture:   "photo-1558618666-fcd25c85cd64", // art/culture
+  desert:    "photo-1509316785289-025f5b846b35",
+  road:      "photo-1469854523086-cc02fe5d8800",
+  adventure: "photo-1530789253388-582c481c54b0",
+  culture:   "photo-1558618666-fcd25c85cd64",
   museum:    "photo-1558618666-fcd25c85cd64",
   default0:  "photo-1469854523086-cc02fe5d8800",
   default1:  "photo-1488646953014-85cb44e25828",
@@ -961,20 +1061,29 @@ const HERO_PHOTOS: Record<string, string> = {
 function dayPhotoUrl(day: DayPlan, planTitle: string, dayIndex: number): string {
   // Extract keywords from the plan title to get the destination (e.g. "Achensee Trip" -> "achensee,trip")
   const keywords = planTitle.replace(/[^a-zA-Z0-9]+/g, ",").toLowerCase();
-  
+
   // Use loremflickr to dynamically fetch an image matching the destination keywords.
   // We include 'landscape' to ensure the photo is scenic.
   return `https://loremflickr.com/1920/1080/landscape,${keywords}/all?lock=${dayIndex}`;
 }
 
-function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onReset: () => void }) {
-  const [plan, setPlan] = useState(initialPlan);
+function ItineraryScreen({ plan, generating, reflowing, flashIds, onSwap, onReset }: {
+  plan: TripPlan;
+  generating: boolean;
+  reflowing: boolean;
+  flashIds: ReadonlySet<string>;
+  onSwap: (blockId: string, optionId: string) => void;
+  onReset: () => void;
+}) {
   const [activeDay, setActiveDay] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [heroBg, setHeroBg] = useState<{ cur: string; prev: string | null; fading: boolean }>({
-    cur: dayPhotoUrl(initialPlan.days[0]!, initialPlan.title, 0),
+    cur: dayPhotoUrl(plan.days[0]!, plan.title, 0),
     prev: null, fading: false,
   });
+
+  const totalDays = totalDaysOf(plan);
+  const pendingDays = generating ? Math.max(0, totalDays - plan.days.length) : 0;
 
   function switchDay(i: number) {
     if (i === activeDay) return;
@@ -984,10 +1093,6 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
       setHeroBg({ cur: newUrl, prev: null, fading: false });
     }, 500);
     setActiveDay(i);
-  }
-
-  function handleSwap(blockId: string, optionId: string) {
-    setPlan((prev) => swapOption(prev, blockId, optionId));
   }
 
   async function handleExportPdf() {
@@ -1014,7 +1119,6 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
 
       {/* ── HERO ── */}
       <div style={{ position: "relative", height: "62vh", minHeight: 420, overflow: "hidden" }}>
-        {/* Outgoing photo */}
         {heroBg.prev && (
           <div style={{
             position: "absolute", inset: 0,
@@ -1024,7 +1128,6 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
             transition: "opacity 0.5s ease",
           }} />
         )}
-        {/* Current photo */}
         <div style={{
           position: "absolute", inset: 0,
           backgroundImage: `url(${heroBg.cur})`,
@@ -1033,24 +1136,23 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
           transition: "opacity 0.5s ease",
           animation: "heroFadeIn 0.8s ease",
         }} />
-        {/* Gradient overlays */}
         <div style={{
           position: "absolute", inset: 0,
           background: "linear-gradient(to bottom, rgba(8,20,48,0.52) 0%, rgba(8,20,48,0.15) 40%, rgba(8,20,48,0.72) 100%)",
         }} />
 
-        {/* Content */}
         <div style={{ position: "relative", zIndex: 2, height: "100%", display: "flex", flexDirection: "column", maxWidth: 900, margin: "0 auto", padding: "0 28px" }}>
-          {/* Top bar */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 24 }}>
             <div style={{ fontSize: 11, letterSpacing: 3, textTransform: "uppercase", fontWeight: 800, color: "rgba(255,255,255,0.7)" }}>
               ✈ TravelMate
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={handleExportPdf} disabled={exporting} className="hero-chip" style={{
-                padding: "8px 18px", background: exporting ? "rgba(255,255,255,0.18)" : "var(--accent)",
+              <button onClick={handleExportPdf} disabled={exporting || generating} className="hero-chip" style={{
+                padding: "8px 18px",
+                background: exporting || generating ? "rgba(255,255,255,0.18)" : "var(--accent)",
                 border: "none", borderRadius: 999, color: "#fff", fontSize: 12.5, fontWeight: 700,
-                boxShadow: "0 4px 20px rgba(0,0,0,0.3)", cursor: exporting ? "wait" : "pointer",
+                boxShadow: generating ? "none" : "0 4px 20px rgba(0,0,0,0.3)",
+                cursor: exporting ? "wait" : generating ? "default" : "pointer",
               }}>
                 {exporting ? "Preparing…" : "⬇ Export PDF"}
               </button>
@@ -1064,10 +1166,8 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
             </div>
           </div>
 
-          {/* Spacer */}
           <div style={{ flex: 1 }} />
 
-          {/* Day badge — changes with active day */}
           <div key={activeDay} style={{ animation: "heroFadeIn 0.4s ease", marginBottom: 12 }}>
             <span style={{
               display: "inline-block",
@@ -1076,11 +1176,10 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
               padding: "5px 14px", borderRadius: 999,
               boxShadow: "0 4px 16px rgba(226,96,58,0.5)",
             }}>
-              Day {currentDay.dayNumber} of {plan.days.length}
+              Day {currentDay.dayNumber} of {totalDays}
             </span>
           </div>
 
-          {/* Trip title */}
           <h1 key={`title-${activeDay}`} style={{
             fontFamily: "var(--font-display-stack)",
             fontSize: "clamp(28px, 4vw, 52px)",
@@ -1092,7 +1191,6 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
             {currentDay.title.replace(/^Day \d+:\s*/, "")}
           </h1>
 
-          {/* Day theme */}
           {currentDay.theme && (
             <p key={`theme-${activeDay}`} style={{
               color: "rgba(255,255,255,0.75)", fontSize: 15, lineHeight: 1.6,
@@ -1103,7 +1201,6 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
             </p>
           )}
 
-          {/* Trip meta chips — shown on day 0 only, fade on switch */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingBottom: 28 }}>
             {[
               `📅 ${firstDate ? fmtDate(firstDate, { day: "numeric", month: "short" }) : ""} – ${lastDate ? fmtDate(lastDate, { day: "numeric", month: "short", year: "numeric" }) : ""}`,
@@ -1121,7 +1218,7 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
         </div>
       </div>
 
-      {/* ── DAY TABS — float over the hero bottom edge ── */}
+      {/* ── DAY TABS — float over hero bottom edge ── */}
       <div style={{ maxWidth: 900, margin: "-28px auto 0", padding: "0 28px", position: "relative", zIndex: 10 }}>
         <div style={{
           display: "flex", gap: 6, padding: "8px", overflowX: "auto",
@@ -1146,12 +1243,49 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
               </button>
             );
           })}
+          {/* Ghost tabs for days still being written */}
+          {Array.from({ length: pendingDays }, (_, i) => (
+            <div
+              key={`pending-${i}`}
+              className="day-pill"
+              style={{ flex: 1, minWidth: 80, padding: "10px 14px", textAlign: "center", borderRadius: 12, opacity: 0.45, cursor: "default", background: "transparent", color: "var(--ink-soft)" }}
+              title="Still being written…"
+            >
+              <div style={{ fontSize: 13, fontWeight: 800, whiteSpace: "nowrap" }}>Day {plan.days.length + i + 1}</div>
+              <div style={{ fontSize: 10.5, opacity: 0.6, whiteSpace: "nowrap", marginTop: 1 }}>writing…</div>
+            </div>
+          ))}
         </div>
+        {generating && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, marginTop: 10,
+            fontSize: 13, color: "var(--ink-soft)", paddingLeft: 4,
+          }}>
+            <span style={{
+              width: 7, height: 7, borderRadius: "50%", background: "var(--accent)",
+              animation: "pulseDot 1.3s ease infinite", flexShrink: 0,
+            }} />
+            {pendingDays > 0
+              ? `Writing day ${plan.days.length + 1} of ${totalDays} — you can already review and swap the days above.`
+              : "Finishing touches — validating the full itinerary…"}
+          </div>
+        )}
+        {!generating && reflowing && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, marginTop: 10,
+            fontSize: 13, color: "var(--ink-soft)", paddingLeft: 4,
+          }}>
+            <span style={{
+              width: 7, height: 7, borderRadius: "50%", background: "var(--teal)",
+              animation: "pulseDot 1.3s ease infinite", flexShrink: 0,
+            }} />
+            Re-flowing dependent cards — transport routes and references are being updated…
+          </div>
+        )}
       </div>
 
       {/* ── DAY CONTENT ── */}
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "32px 28px 60px" }}>
-        {/* Day header */}
         <div key={`header-${activeDay}`} style={{ animation: "fadeUp 0.35s ease", marginBottom: 28 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 6 }}>
             <h2 style={{ fontSize: 28, fontWeight: 800, color: "var(--navy)", fontFamily: "var(--font-display-stack)" }}>
@@ -1183,10 +1317,9 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
           )}
         </div>
 
-        {/* Timeline */}
         <div key={`timeline-${activeDay}`} style={{ animation: "fadeUp 0.4s ease" }}>
           {currentDay.blocks.map((b, i) => (
-            <TimelineBlock key={b.blockId} block={b} isLast={i === currentDay.blocks.length - 1} onSwap={handleSwap} />
+            <TimelineBlock key={b.blockId} block={b} isLast={i === currentDay.blocks.length - 1} onSwap={onSwap} flash={flashIds.has(b.blockId)} />
           ))}
         </div>
 
@@ -1203,8 +1336,14 @@ function ItineraryScreen({ plan: initialPlan, onReset }: { plan: TripPlan; onRes
               Export a PDF with your selected options — take it offline, print it, share it.
             </div>
           </div>
-          <button className="btn-primary" onClick={handleExportPdf} disabled={exporting} style={{ padding: "12px 26px", fontSize: 14.5, flexShrink: 0 }}>
-            {exporting ? "Preparing…" : "⬇ Download PDF"}
+          <button
+            className="btn-primary"
+            onClick={handleExportPdf}
+            disabled={exporting || generating}
+            title={generating ? "Available when all days are ready" : undefined}
+            style={{ padding: "12px 26px", fontSize: 14.5, flexShrink: 0 }}
+          >
+            {exporting ? "Preparing…" : generating ? `Writing day ${plan.days.length + 1}…` : "⬇ Download PDF"}
           </button>
         </div>
       </div>
@@ -1235,24 +1374,86 @@ function ErrorScreen({ message, onReset }: { message: string; onReset: () => voi
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-type Screen = { kind: "input" } | { kind: "thinking"; thoughts: string[]; destination: string; tripType: string } | { kind: "itinerary"; plan: TripPlan } | { kind: "error"; message: string };
+type Screen =
+  | { kind: "input" }
+  | { kind: "thinking"; thoughts: string[]; destination: string; tripType: string }
+  | { kind: "itinerary"; plan: TripPlan; generating: boolean }
+  | { kind: "error"; message: string };
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>({ kind: "input" });
+  const [reflowing, setReflowing] = useState(false);
+  const [flashIds, setFlashIds] = useState<ReadonlySet<string>>(new Set());
   const esRef = useRef<EventSource | null>(null);
+  const swappedDaysRef = useRef<Set<number>>(new Set());
+  const pendingEditsRef = useRef<Array<{ blockId: string; optionId: string }>>([]);
+  const editChainRef = useRef<Promise<void>>(Promise.resolve());
+  const inFlightEditsRef = useRef(0);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function reset() {
     esRef.current?.close();
     esRef.current = null;
+    swappedDaysRef.current = new Set();
+    pendingEditsRef.current = [];
+    inFlightEditsRef.current = 0;
+    setReflowing(false);
+    setFlashIds(new Set());
     setScreen({ kind: "input" });
+  }
+
+  function flashChanged(ids: string[]) {
+    setFlashIds(new Set(ids));
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setFlashIds(new Set()), 3000);
+  }
+
+  function postEdit(planId: string, blockId: string, optionId: string) {
+    inFlightEditsRef.current++;
+    setReflowing(true);
+    editChainRef.current = editChainRef.current.then(async () => {
+      try {
+        const res = await fetch(`${API}/modify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ planId, blockId, newOptionId: optionId }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { plan, changedBlockIds } = await res.json() as { plan: TripPlan; changedBlockIds: string[] };
+        inFlightEditsRef.current--;
+        if (inFlightEditsRef.current === 0) {
+          setScreen((s) => (s.kind === "itinerary" ? { ...s, plan } : s));
+          flashChanged(changedBlockIds.filter((id) => id !== blockId));
+          setReflowing(false);
+        }
+      } catch (err) {
+        inFlightEditsRef.current--;
+        if (inFlightEditsRef.current === 0) setReflowing(false);
+        console.warn("Re-flow failed — keeping the local swap only:", err);
+      }
+    });
+  }
+
+  function handleSwap(blockId: string, optionId: string) {
+    setScreen((s) => {
+      if (s.kind !== "itinerary") return s;
+      const day = s.plan.days.find((d) => d.blocks.some((b) => b.blockId === blockId));
+      if (day) swappedDaysRef.current.add(day.dayNumber);
+      if (s.generating) {
+        pendingEditsRef.current.push({ blockId, optionId });
+      } else {
+        postEdit(s.plan.planId, blockId, optionId);
+      }
+      return { ...s, plan: swapOption(s.plan, blockId, optionId) };
+    });
   }
 
   async function handleSubmit(brief: string) {
     const destination = extractDestination(brief);
     const tripType = extractTripType(brief);
+    swappedDaysRef.current = new Set();
     setScreen({ kind: "thinking", thoughts: ["Connecting…"], destination, tripType });
 
-    // POST /plan
     let planId: string;
     try {
       const res = await fetch(`${API}/plan`, {
@@ -1276,7 +1477,6 @@ export default function Home() {
       return;
     }
 
-    // SSE
     const es = new EventSource(`${API}/plan/${planId}/stream`);
     esRef.current = es;
 
@@ -1285,15 +1485,31 @@ export default function Home() {
       setScreen((s) => s.kind === "thinking" ? { kind: "thinking", thoughts: [...s.thoughts, text], destination: s.destination, tripType: s.tripType } : s);
     });
 
+    es.addEventListener("partial", (e) => {
+      const incoming = JSON.parse((e as MessageEvent).data) as TripPlan;
+      setScreen((s) => ({
+        kind: "itinerary",
+        plan: mergePlans(s.kind === "itinerary" ? s.plan : null, incoming, swappedDaysRef.current),
+        generating: true,
+      }));
+    });
+
     es.addEventListener("ready", (e) => {
-      const plan = JSON.parse((e as MessageEvent).data) as TripPlan;
+      const incoming = JSON.parse((e as MessageEvent).data) as TripPlan;
       es.close();
-      setScreen({ kind: "itinerary", plan });
+      setScreen((s) => ({
+        kind: "itinerary",
+        plan: mergePlans(s.kind === "itinerary" ? s.plan : null, incoming, swappedDaysRef.current),
+        generating: false,
+      }));
+      const pending = pendingEditsRef.current;
+      pendingEditsRef.current = [];
+      for (const edit of pending) {
+        postEdit(incoming.planId, edit.blockId, edit.optionId);
+      }
     });
 
     es.addEventListener("error", (e) => {
-      // Only handle server-sent `event: error` messages (have .data).
-      // Native connection errors have no .data — let onerror handle those.
       const raw = (e as MessageEvent).data;
       if (!raw) return;
       const { message } = JSON.parse(raw) as { message?: string };
@@ -1315,15 +1531,22 @@ export default function Home() {
     <>
       {screen.kind === "input" && <InputScreen onSubmit={handleSubmit} />}
       {screen.kind === "thinking" && <ThinkingScreen thoughts={screen.thoughts} destination={screen.destination} tripType={screen.tripType} />}
-      {screen.kind === "itinerary" && <ItineraryScreen plan={screen.plan} onReset={reset} />}
+      {screen.kind === "itinerary" && (
+        <ItineraryScreen
+          plan={screen.plan}
+          generating={screen.generating}
+          reflowing={reflowing}
+          flashIds={flashIds}
+          onSwap={handleSwap}
+          onReset={reset}
+        />
+      )}
       {screen.kind === "error" && <ErrorScreen message={screen.message} onReset={reset} />}
     </>
   );
 }
 
 // ── Lightweight local extractors for the initial POST ─────────────────────────
-// These give the intent LLM something to start with.
-// The intent stage refines everything from the free-form text anyway.
 
 function extractDestination(text: string): string {
   let t = text.trim();

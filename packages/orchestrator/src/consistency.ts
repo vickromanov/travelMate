@@ -12,7 +12,7 @@
  * it safely can in code (no LLM); the quality validator then flags anything
  * that still contradicts, feeding the scoped repair pass.
  */
-import type { TripPlan, TravelOption, ItineraryBlock } from "@travelmate/contracts";
+import type { TripPlan, TravelOption, ItineraryBlock, DayPlan } from "@travelmate/contracts";
 
 /** Words that prove reaching/using this option COSTS money (a ticket exists). */
 const PAID_ACCESS_RE =
@@ -71,6 +71,7 @@ export function enforceConsistency(plan: TripPlan): ConsistencyReport {
       }
       if (block.category === "TRANSPORT") {
         for (const opt of block.options) fixed += reconcileTransportLink(opt);
+        fixed += stampDepartureTime(day, block);
       }
     }
   }
@@ -147,6 +148,55 @@ function reconcileTransportLink(opt: TravelOption): number {
         opt.linkType = "DIRECTIONS";
         changed++;
       }
+    } catch { /* malformed — verify-links will handle */ }
+  }
+  return changed;
+}
+
+/**
+ * Build a Unix epoch (seconds) for a Google Maps departure_time parameter.
+ *
+ * Google Maps only has transit schedules ~1 week out, so a trip date months
+ * in the future returns no results. Instead we find the NEXT occurrence of
+ * the same weekday from today — preserving the day-of-week (schedule
+ * patterns repeat weekly) while staying inside Google's data window.
+ */
+export function departureEpoch(dayDate: string, scheduledTime: string): number {
+  const [h, m] = scheduledTime.split(":").map(Number);
+  const tripDay = new Date(`${dayDate}T00:00:00Z`);
+  const targetDow = tripDay.getUTCDay(); // 0=Sun … 6=Sat
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const todayDow = today.getUTCDay();
+
+  let daysAhead = (targetDow - todayDow + 7) % 7;
+  if (daysAhead === 0) daysAhead = 7; // always at least 1 day out so Google has data
+
+  const proxy = new Date(today);
+  proxy.setUTCDate(proxy.getUTCDate() + daysAhead);
+  proxy.setUTCHours(h ?? 8, m ?? 0, 0, 0);
+  return Math.floor(proxy.getTime() / 1000);
+}
+
+/**
+ * Inject `&departure_time=EPOCH` into every TRANSPORT option's direction link
+ * so Google Maps opens with the correct travel date, not "Leave now".
+ */
+function stampDepartureTime(day: DayPlan, block: ItineraryBlock): number {
+  if (!day.date || !block.scheduledTime) return 0;
+  const epoch = departureEpoch(day.date, block.scheduledTime);
+  let changed = 0;
+  for (const opt of block.options) {
+    if (!opt.link) continue;
+    const isDir = /google\.[a-z.]+\/maps\/dir/i.test(opt.link);
+    if (!isDir) continue;
+    try {
+      const u = new URL(opt.link);
+      if (u.searchParams.get("departure_time")) continue;
+      u.searchParams.set("departure_time", String(epoch));
+      opt.link = u.toString();
+      changed++;
     } catch { /* malformed — verify-links will handle */ }
   }
   return changed;
