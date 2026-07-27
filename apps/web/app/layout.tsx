@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Fraunces, Inter } from "next/font/google";
+import { Providers } from "../src/components/providers";
 import "./globals.css";
 
 // Editorial serif for headings (wanderlust, travel-journal feel) +
@@ -22,7 +23,9 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${inter.variable}`}>
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

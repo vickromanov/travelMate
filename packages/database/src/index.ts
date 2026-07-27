@@ -21,6 +21,8 @@ export type { PlanObserver, PlanListener } from "./observer.js";
 export { createMemoryCache, createMemoryPlanStore, createMemoryObserver } from "./adapters/memory.js";
 export { createRedisCache } from "./adapters/redis.js";
 export { createPostgresStore } from "./adapters/postgres.js";
+export { getPrisma } from "./prisma.js";
+export type { PrismaClient } from "./prisma.js";
 
 export interface Database {
   cache: CacheStore;
