@@ -10,11 +10,14 @@ loadEnv({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../../../.env.
 
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 import { createDatabase } from "@travelmate/database";
 import { createLLMClient } from "@travelmate/llm";
 import type { Deps } from "@travelmate/orchestrator";
 import { planRoutes } from "./routes/plan.js";
 import { modifyRoutes } from "./routes/modify.js";
+import { authRoutes } from "./routes/auth.js";
+import { sessionMiddleware } from "./middleware/session.js";
 
 export const db = createDatabase("memory");
 export const llm = createLLMClient();
@@ -24,12 +27,20 @@ export async function startServer(port = Number(process.env.API_PORT ?? 8080)) {
   const app = Fastify({ logger: { level: "info" } });
 
   await app.register(cors, {
-    origin: process.env.CORS_ORIGIN ?? "http://localhost:3000", // Next.js dev default
+    origin: process.env.CORS_ORIGIN ?? "http://localhost:3000",
     methods: ["GET", "POST", "OPTIONS"],
+    credentials: true,
   });
+
+  await app.register(cookie, {
+    secret: process.env.SESSION_SECRET ?? "travelmate-dev-secret",
+  });
+
+  app.addHook("preHandler", sessionMiddleware);
 
   await app.register(planRoutes);
   await app.register(modifyRoutes);
+  await app.register(authRoutes);
 
   app.get("/health", async () => ({ status: "ok" }));
 

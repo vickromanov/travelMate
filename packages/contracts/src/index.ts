@@ -12,3 +12,4 @@ export * from "./cache.js";
 export * from "./llm.js";
 export * from "./tripmode.js";
 export * from "./stream.js";
+export * from "./auth.js";

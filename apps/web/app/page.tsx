@@ -4,6 +4,7 @@ import type { Money, TravelOption, Block, DayPlan, TripPlan } from "../src/lib/p
 import { linkActionLabel, bookingActionLabel, isFreeWalkIn } from "../src/lib/plan-types";
 import { mergePlans, totalDaysOf } from "../src/lib/merge-plan";
 import { downloadItineraryPdf } from "../src/pdf/export-pdf";
+import { UserMenu } from "../src/components/user-menu";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
@@ -1529,6 +1530,9 @@ export default function Home() {
 
   return (
     <>
+      <div style={{ position: "fixed", top: 16, right: 20, zIndex: 200 }}>
+        <UserMenu />
+      </div>
       {screen.kind === "input" && <InputScreen onSubmit={handleSubmit} />}
       {screen.kind === "thinking" && <ThinkingScreen thoughts={screen.thoughts} destination={screen.destination} tripType={screen.tripType} />}
       {screen.kind === "itinerary" && (
