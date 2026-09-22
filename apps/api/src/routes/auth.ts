@@ -12,6 +12,7 @@ import {
   SESSION_MAX_AGE_MS,
   requireAuth,
 } from "../middleware/session.js";
+import { rateLimit } from "../middleware/rate-limit.js";
 
 const BCRYPT_ROUNDS = 12;
 
@@ -42,8 +43,10 @@ function getGoogle(): Google | null {
 }
 
 export async function authRoutes(app: FastifyInstance) {
+  const authRateLimit = rateLimit({ max: 10, windowMs: 60_000 });
+
   // ── POST /auth/signup ──────────────────────────────────────────────
-  app.post("/auth/signup", async (request, reply) => {
+  app.post("/auth/signup", { preHandler: [authRateLimit] }, async (request, reply) => {
     const parsed = SignupRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid input" });
@@ -67,7 +70,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ── POST /auth/login ───────────────────────────────────────────────
-  app.post("/auth/login", async (request, reply) => {
+  app.post("/auth/login", { preHandler: [authRateLimit] }, async (request, reply) => {
     const parsed = LoginRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid input" });

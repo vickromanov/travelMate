@@ -32,8 +32,12 @@ export async function startServer(port = Number(process.env.API_PORT ?? 8080)) {
     credentials: true,
   });
 
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret && process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET must be set in production");
+  }
   await app.register(cookie, {
-    secret: process.env.SESSION_SECRET ?? "travelmate-dev-secret",
+    secret: sessionSecret ?? "travelmate-dev-secret",
   });
 
   app.addHook("preHandler", sessionMiddleware);
