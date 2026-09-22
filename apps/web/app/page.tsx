@@ -5,6 +5,7 @@ import { linkActionLabel, bookingActionLabel, isFreeWalkIn } from "../src/lib/pl
 import { mergePlans, totalDaysOf } from "../src/lib/merge-plan";
 import { downloadItineraryPdf } from "../src/pdf/export-pdf";
 import { UserMenu } from "../src/components/user-menu";
+import { useAuth } from "../src/hooks/use-auth";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
@@ -13,27 +14,72 @@ const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 function swapOption(plan: TripPlan, blockId: string, newOptionId: string): TripPlan {
   const updated = structuredClone(plan);
 
-  // Find the block being swapped
+  // Find the block and its day
   let swappedBlock: Block | undefined;
+  let swappedDay: DayPlan | undefined;
+  let swappedIndex = -1;
   for (const day of updated.days) {
-    const block = day.blocks.find((b) => b.blockId === blockId);
-    if (block) { swappedBlock = block; break; }
+    const i = day.blocks.findIndex((b) => b.blockId === blockId);
+    if (i !== -1) { swappedBlock = day.blocks[i]; swappedDay = day; swappedIndex = i; break; }
   }
-  if (!swappedBlock) return updated;
+  if (!swappedBlock || !swappedDay) return updated;
 
   const oldOptionId = swappedBlock.selectedOptionId;
+  const oldOption = swappedBlock.options.find((o) => o.id === oldOptionId);
   swappedBlock.selectedOptionId = newOptionId;
+  const newOption = swappedBlock.options.find((o) => o.id === newOptionId);
 
-  // If a STAYS block was swapped, update dependent TRANSPORT blocks
+  if (!oldOption || !newOption || oldOption.title === newOption.title) return updated;
+
+  // STAYS: propagate to transport blocks across the whole plan
   if (swappedBlock.category === "STAYS") {
-    const oldHotel = swappedBlock.options.find((o) => o.id === oldOptionId);
-    const newHotel = swappedBlock.options.find((o) => o.id === newOptionId);
-    if (oldHotel && newHotel && oldHotel.title !== newHotel.title) {
-      updateDependentTransport(updated, oldHotel.title, newHotel);
+    updateDependentTransport(updated, oldOption.title, newOption);
+    return updated;
+  }
+
+  // ALL OTHER CATEGORIES: update adjacent transport blocks on the same day
+  if (swappedBlock.category !== "TRANSPORT") {
+    // Transport BEFORE: its destination was the old venue
+    for (let i = swappedIndex - 1; i >= 0; i--) {
+      const b = swappedDay.blocks[i]!;
+      if (b.category === "TRANSPORT") {
+        patchTransportBlock(b, oldOption.title, newOption.title);
+        break;
+      }
+      if (b.category !== "TRANSPORT") break;
+    }
+    // Transport AFTER: its origin was the old venue
+    for (let i = swappedIndex + 1; i < swappedDay.blocks.length; i++) {
+      const b = swappedDay.blocks[i]!;
+      if (b.category === "TRANSPORT") {
+        patchTransportBlock(b, oldOption.title, newOption.title);
+        break;
+      }
+      if (b.category !== "TRANSPORT") break;
     }
   }
 
   return updated;
+}
+
+function patchTransportBlock(block: Block, oldName: string, newName: string) {
+  const oldForms: Array<[string, string]> = [
+    [oldName, newName],
+    [oldName.replace(/ /g, "+"), newName.replace(/ /g, "+")],
+    [encodeURIComponent(oldName), encodeURIComponent(newName)],
+  ];
+  for (const opt of block.options) {
+    if (opt.link) {
+      for (const [from, to] of oldForms) {
+        opt.link = replaceAllCI(opt.link, from, to);
+      }
+    }
+    opt.title = replaceAllCI(opt.title, oldName, newName);
+    opt.description = replaceAllCI(opt.description, oldName, newName);
+  }
+  if (block.label) {
+    block.label = replaceAllCI(block.label, oldName, newName);
+  }
 }
 
 function escapeRegExp(s: string): string {
@@ -1382,6 +1428,7 @@ type Screen =
   | { kind: "error"; message: string };
 
 export default function Home() {
+  const { preferences } = useAuth();
   const [screen, setScreen] = useState<Screen>({ kind: "input" });
   const [reflowing, setReflowing] = useState(false);
   const [flashIds, setFlashIds] = useState<ReadonlySet<string>>(new Set());
@@ -1464,8 +1511,9 @@ export default function Home() {
           destination: extractDestination(brief),
           travelerDescription: brief,
           tripType: extractTripType(brief),
-          budgetTier: extractBudget(brief),
+          budgetTier: preferences?.defaultBudgetTier ?? extractBudget(brief),
           freeformText: brief,
+          ...(preferences ? { userPreferences: preferences } : {}),
         }),
       });
       if (!res.ok) {

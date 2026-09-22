@@ -60,6 +60,26 @@ function parseEarliestOpen(hours: string | undefined): number | null {
   return parseInt(m[1]!, 10) * 60 + parseInt(m[2]!, 10);
 }
 
+function parseClosingTime(hours: string | undefined): number | null {
+  if (!hours) return null;
+  const m = hours.match(/[–—\-–—]\s*(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  let mins = parseInt(m[1]!, 10) * 60 + parseInt(m[2]!, 10);
+  // Midnight or after (00:00–03:00) means next-day close — normalise to 24h+
+  if (mins < 3 * 60) mins += 24 * 60;
+  return mins;
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 function addDaysISO(dateStr: string, n: number): string {
   const d = new Date(dateStr + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + n);
@@ -68,6 +88,18 @@ function addDaysISO(dateStr: string, n: number): string {
 
 function anchorTitle(block: ItineraryBlock): string | undefined {
   return block.options.find((o) => o.tier === "ANCHOR")?.title;
+}
+
+function selectedTitle(block: ItineraryBlock): string | undefined {
+  return (block.options.find((o) => o.id === block.selectedOptionId) ?? block.options[0])?.title;
+}
+
+function findAdjacentVenue(day: DayPlan, transportIndex: number, direction: -1 | 1): string | undefined {
+  for (let i = transportIndex + direction; i >= 0 && i < day.blocks.length; i += direction) {
+    const b = day.blocks[i]!;
+    if (b.category !== "TRANSPORT") return selectedTitle(b);
+  }
+  return undefined;
 }
 
 export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): QualityReport {
@@ -261,6 +293,24 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
         if (anchor?.link && !/maps\/dir|maps\.google|goo\.gl\/maps|google\.com\/maps/.test(anchor.link)) {
           warn("transport-directions-link", bWhere, "ANCHOR transport option link is not a maps/directions URL", day.dayNumber);
         }
+
+        // Transport-adjacency: directions link should reference the adjacent venues
+        if (anchor?.link && /maps\/dir/.test(anchor.link)) {
+          const blockIdx = day.blocks.indexOf(b);
+          const prevVenue = findAdjacentVenue(day, blockIdx, -1);
+          const nextVenue = findAdjacentVenue(day, blockIdx, 1);
+          const decodedLink = decodeURIComponent(anchor.link).replace(/\+/g, " ").toLowerCase();
+          if (prevVenue && !decodedLink.includes(prevVenue.toLowerCase())) {
+            warn("transport-adjacency", bWhere,
+              `directions link origin does not mention "${prevVenue}" — the link may route from the wrong venue`,
+              day.dayNumber);
+          }
+          if (nextVenue && !decodedLink.includes(nextVenue.toLowerCase())) {
+            warn("transport-adjacency", bWhere,
+              `directions link destination does not mention "${nextVenue}" — the link may route to the wrong venue`,
+              day.dayNumber);
+          }
+        }
       }
 
       // CROSS-FIELD CONSISTENCY (H3). A priced ticket, or an option gated
@@ -311,11 +361,117 @@ export function validatePlanQuality(plan: TripPlan, opts: QualityOptions = {}): 
       }
     }
 
+    // Time overlap detection: block B starts before block A ends
+    {
+      const timed = day.blocks
+        .map((b) => ({ b, t: timeToMinutes(b.scheduledTime) }))
+        .filter((x): x is { b: ItineraryBlock; t: number } => x.t !== null);
+      for (let j = 1; j < timed.length; j++) {
+        const prev = timed[j - 1]!;
+        const curr = timed[j]!;
+        const prevSel = prev.b.options.find((o) => o.id === prev.b.selectedOptionId) ?? prev.b.options[0];
+        const dur = prevSel?.durationMinutes;
+        if (dur && dur > 0 && curr.t < prev.t + dur) {
+          err("time-overlap", `${where}, block ${curr.b.blockId}`,
+            `overlaps with previous block "${prev.b.blockId}" (${minutesToTime(prev.t)}+${dur}min ends at ${minutesToTime(prev.t + dur)}, but this starts at ${minutesToTime(curr.t)})`,
+            day.dayNumber);
+        }
+      }
+    }
+
+    // Closing/last-entry time: scheduled end exceeds venue closing
+    for (const b of day.blocks) {
+      if (b.category === "STAYS" || b.category === "TRANSPORT") continue;
+      const scheduled = timeToMinutes(b.scheduledTime);
+      if (scheduled === null) continue;
+      for (const o of b.options) {
+        const closes = parseClosingTime(o.openingHours);
+        if (closes === null) continue;
+        const dur = o.durationMinutes ?? 60;
+        if (scheduled + dur > closes) {
+          warn("past-closing", `${where}, block ${b.blockId}`,
+            `option "${o.title}" closes at ${minutesToTime(closes)} but visit (${minutesToTime(scheduled)}+${dur}min) ends at ${minutesToTime(scheduled + dur)}`,
+            day.dayNumber);
+        }
+      }
+    }
+
+    // Tier price ordering: SMART-VALUE <= ANCHOR <= PREMIUM
+    for (const b of day.blocks) {
+      const anchor = b.options.find((o) => o.tier === "ANCHOR");
+      if (!anchor) continue;
+      const sv = b.options.find((o) => o.tier === "SMART-VALUE");
+      const prem = b.options.find((o) => o.tier === "PREMIUM");
+      if (sv && sv.price.amount > anchor.price.amount * 1.1) {
+        warn("tier-price-order", `${where}, block ${b.blockId}`,
+          `SMART-VALUE "${sv.title}" (${sv.price.currency} ${sv.price.amount}) is more expensive than ANCHOR "${anchor.title}" (${anchor.price.currency} ${anchor.price.amount})`,
+          day.dayNumber);
+      }
+      if (prem && prem.price.amount < anchor.price.amount * 0.9 && prem.price.amount > 0) {
+        warn("tier-price-order", `${where}, block ${b.blockId}`,
+          `PREMIUM "${prem.title}" (${prem.price.currency} ${prem.price.amount}) is cheaper than ANCHOR "${anchor.title}" (${anchor.price.currency} ${anchor.price.amount})`,
+          day.dayNumber);
+      }
+    }
+
     // Hotel consistency across the trip (warning — city moves are legitimate)
     const stays = day.blocks.find((b) => b.category === "STAYS");
     const hotel = stays ? anchorTitle(stays) : undefined;
     if (hotel) hotelByDay.push({ day: day.dayNumber, title: hotel });
   });
+
+  // Duplicate venue detection (ACTIVITIES only — hotels repeat, restaurants may)
+  {
+    const venueOccurrences = new Map<string, string[]>();
+    for (const day of plan.days) {
+      for (const b of day.blocks) {
+        if (b.category !== "ACTIVITIES") continue;
+        const anchor = b.options.find((o) => o.tier === "ANCHOR") ?? b.options[0];
+        if (!anchor) continue;
+        const key = anchor.title.toLowerCase().trim();
+        if (!venueOccurrences.has(key)) venueOccurrences.set(key, []);
+        venueOccurrences.get(key)!.push(`day ${day.dayNumber}, block ${b.blockId}`);
+      }
+    }
+    for (const [venue, locs] of venueOccurrences) {
+      if (locs.length > 1) {
+        warn("duplicate-venue", locs.join(" + "),
+          `activity "${venue}" appears ${locs.length} times — consider varying the itinerary`);
+      }
+    }
+  }
+
+  // Geographic outlier detection (haversine from median, >100km = hallucinated coords)
+  {
+    const coords: Array<{ lat: number; lng: number; where: string; title: string }> = [];
+    for (const day of plan.days) {
+      for (const b of day.blocks) {
+        if (b.category === "TRANSPORT") continue;
+        const anchor = b.options.find((o) => o.tier === "ANCHOR") ?? b.options[0];
+        if (!anchor || (anchor.location.lat === 0 && anchor.location.lng === 0)) continue;
+        coords.push({
+          lat: anchor.location.lat,
+          lng: anchor.location.lng,
+          where: `day ${day.dayNumber}, block ${b.blockId}`,
+          title: anchor.title,
+        });
+      }
+    }
+    if (coords.length >= 3) {
+      const sorted = (arr: number[]) => [...arr].sort((a, b) => a - b);
+      const lats = sorted(coords.map((c) => c.lat));
+      const lngs = sorted(coords.map((c) => c.lng));
+      const medLat = lats[Math.floor(lats.length / 2)]!;
+      const medLng = lngs[Math.floor(lngs.length / 2)]!;
+      for (const c of coords) {
+        const dist = haversineKm(c.lat, c.lng, medLat, medLng);
+        if (dist > 100) {
+          err("geographic-outlier", c.where,
+            `"${c.title}" is ${Math.round(dist)}km from the trip's geographic center — likely hallucinated coordinates`);
+        }
+      }
+    }
+  }
 
   const distinctHotels = new Set(hotelByDay.map((h) => h.title.toLowerCase().trim()));
   if (distinctHotels.size > Math.max(1, Math.ceil(plan.days.length / 3))) {

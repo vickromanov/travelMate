@@ -44,3 +44,29 @@ export async function getMe(): Promise<AuthUser | null> {
 export function getGoogleAuthUrl(): string {
   return `${BASE}/auth/google`;
 }
+
+export interface UserPreferences {
+  dietaryRestrictions: string[];
+  accessibilityNeeds: string;
+  travelPace: "relaxed" | "moderate" | "packed";
+  interests: string[];
+  accommodationStyle: "hotel" | "boutique" | "hostel" | "apartment" | "resort" | "no-preference";
+  travelStyle: string[];
+  homeCity: string;
+  defaultBudgetTier: "ECONOMY" | "SMART" | "LUXURY" | null;
+  preferredCurrency: string;
+}
+
+export async function getPreferences(): Promise<UserPreferences> {
+  const res = await fetch(`${BASE}/auth/preferences`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load preferences");
+  return res.json() as Promise<UserPreferences>;
+}
+
+export async function updatePreferences(prefs: UserPreferences): Promise<UserPreferences> {
+  const res = await fetch(`${BASE}/auth/preferences`, {
+    ...opts, method: "PUT", body: JSON.stringify(prefs),
+  });
+  if (!res.ok) throw new Error("Failed to save preferences");
+  return res.json() as Promise<UserPreferences>;
+}

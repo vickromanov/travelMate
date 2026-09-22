@@ -4,6 +4,7 @@
  */
 import { z } from "zod";
 import { BudgetTierSchema, GeoLocationSchema, MoneySchema } from "./common.js";
+import { UserPreferencesSchema } from "./auth.js";
 
 // LLMs return null for missing optional fields — coerce null → undefined everywhere.
 const optStr = () => z.string().nullish().transform((v) => v ?? undefined);
@@ -36,6 +37,7 @@ export const CrucialInfoSchema = z.object({
   partyAdults: optNum(z.number().int().positive()),
   partyChildren: optNum(z.number().int().nonnegative()),
   freeformText: optStr(),
+  userPreferences: UserPreferencesSchema.nullish().transform((v) => v ?? undefined),
 });
 export type CrucialInfo = z.infer<typeof CrucialInfoSchema>;
 

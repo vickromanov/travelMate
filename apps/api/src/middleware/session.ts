@@ -43,8 +43,8 @@ export async function sessionMiddleware(request: FastifyRequest, _reply: Fastify
   request.sessionId = session.id;
 }
 
-export function requireAuth(request: FastifyRequest, reply: FastifyReply) {
+export async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
   if (!request.user) {
-    reply.code(401).send({ error: "Authentication required" });
+    return reply.code(401).send({ error: "Authentication required" });
   }
 }

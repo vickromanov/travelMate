@@ -127,6 +127,20 @@ If NO event/festival/seasonal occasion is referenced, return ONLY:
   }
 }
 
+function buildPreferencesBlock(input: CrucialInfo): string {
+  const p = input.userPreferences;
+  if (!p) return "";
+  const lines: string[] = [];
+  if (p.dietaryRestrictions.length) lines.push(`Dietary restrictions: ${p.dietaryRestrictions.join(", ")}`);
+  if (p.accessibilityNeeds) lines.push(`Accessibility needs: ${p.accessibilityNeeds}`);
+  if (p.travelPace !== "moderate") lines.push(`Travel pace: ${p.travelPace}`);
+  if (p.interests.length) lines.push(`Interests: ${p.interests.join(", ")}`);
+  if (p.accommodationStyle !== "no-preference") lines.push(`Accommodation style: ${p.accommodationStyle}`);
+  if (p.travelStyle.length) lines.push(`Travel style: ${p.travelStyle.join(", ")}`);
+  if (!lines.length) return "";
+  return `\nUSER PREFERENCES (from their saved profile — incorporate into travelerProfile):\n${lines.join("\n")}`;
+}
+
 function buildUserPrompt(input: CrucialInfo, eventDates: string | null): string {
   const today = new Date().toISOString().slice(0, 10);
   return `Today's date: ${today}
@@ -144,7 +158,7 @@ End date: ${input.endDate ?? "not specified"}
 Adults: ${input.partyAdults ?? "not specified"}
 Children: ${input.partyChildren ?? "not specified"}
 Free-form text: ${input.freeformText ?? "none"}
-
+${buildPreferencesBlock(input)}
 Extract the trip brief now.`;
 }
 
