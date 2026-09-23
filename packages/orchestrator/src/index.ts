@@ -16,6 +16,8 @@ export type { TripSkeleton, SkeletonDay } from "./skeleton.js";
 export { synthesizePlan } from "./synthesis.js";
 export { reflow, deriveDependents } from "./reflow.js";
 export type { ReflowResult } from "./reflow.js";
+export { refinePlan } from "./refine.js";
+export type { RefineResult } from "./refine.js";
 export { validatePlanQuality, formatQualityReport } from "./quality.js";
 export type { QualityIssue, QualityReport } from "./quality.js";
 export { verifyDayLinks, mapsSearchUrl } from "./verify-links.js";

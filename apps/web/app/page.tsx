@@ -1114,16 +1114,20 @@ function dayPhotoUrl(day: DayPlan, planTitle: string, dayIndex: number): string 
   return `https://loremflickr.com/1920/1080/landscape,${keywords}/all?lock=${dayIndex}`;
 }
 
-function ItineraryScreen({ plan, generating, reflowing, flashIds, onSwap, onReset }: {
+function ItineraryScreen({ plan, generating, reflowing, refining, refineThoughts, flashIds, onSwap, onReset, onRefine }: {
   plan: TripPlan;
   generating: boolean;
   reflowing: boolean;
+  refining: boolean;
+  refineThoughts: string[];
   flashIds: ReadonlySet<string>;
   onSwap: (blockId: string, optionId: string) => void;
   onReset: () => void;
+  onRefine: (message: string) => void;
 }) {
   const [activeDay, setActiveDay] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [refineInput, setRefineInput] = useState("");
   const [heroBg, setHeroBg] = useState<{ cur: string; prev: string | null; fading: boolean }>({
     cur: dayPhotoUrl(plan.days[0]!, plan.title, 0),
     prev: null, fading: false,
@@ -1393,6 +1397,71 @@ function ItineraryScreen({ plan, generating, reflowing, flashIds, onSwap, onRese
             {exporting ? "Preparing…" : generating ? `Writing day ${plan.days.length + 1}…` : "⬇ Download PDF"}
           </button>
         </div>
+
+        {/* ── Refine chat bar ── */}
+        <div style={{ marginTop: 24, marginBottom: 16 }}>
+          {refining && refineThoughts.length > 0 && (
+            <div style={{
+              marginBottom: 12, padding: "12px 16px",
+              background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
+              fontSize: 13, color: "var(--ink-soft)", lineHeight: 1.7,
+            }}>
+              {refineThoughts.map((t, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                  {i === refineThoughts.length - 1 && (
+                    <span style={{
+                      width: 6, height: 6, borderRadius: "50%", background: "var(--accent)",
+                      animation: "pulseDot 1.3s ease infinite", flexShrink: 0, marginTop: 5,
+                    }} />
+                  )}
+                  <span style={{ opacity: i === refineThoughts.length - 1 ? 1 : 0.6 }}>{t}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const msg = refineInput.trim();
+              if (!msg || refining || generating) return;
+              onRefine(msg);
+              setRefineInput("");
+            }}
+            style={{
+              display: "flex", gap: 8,
+              background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14,
+              padding: 6, boxShadow: "var(--shadow-sm)",
+            }}
+          >
+            <input
+              type="text"
+              value={refineInput}
+              onChange={(e) => setRefineInput(e.target.value)}
+              placeholder={refining ? "Refining…" : "Refine your itinerary — e.g. \"add two more days\" or \"make it cheaper\""}
+              disabled={refining || generating}
+              style={{
+                flex: 1, padding: "10px 14px", fontSize: 14,
+                border: "none", outline: "none", background: "transparent",
+                color: "var(--ink)", fontFamily: "inherit",
+              }}
+            />
+            <button
+              type="submit"
+              disabled={!refineInput.trim() || refining || generating}
+              style={{
+                padding: "10px 20px", borderRadius: 10,
+                background: !refineInput.trim() || refining || generating ? "var(--border)" : "var(--accent)",
+                color: "#fff", border: "none", fontSize: 13.5, fontWeight: 700,
+                cursor: !refineInput.trim() || refining || generating ? "default" : "pointer",
+                transition: "background 0.2s",
+                flexShrink: 0,
+              }}
+            >
+              {refining ? "Refining…" : "Refine"}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );
@@ -1431,6 +1500,8 @@ export default function Home() {
   const { preferences } = useAuth();
   const [screen, setScreen] = useState<Screen>({ kind: "input" });
   const [reflowing, setReflowing] = useState(false);
+  const [refining, setRefining] = useState(false);
+  const [refineThoughts, setRefineThoughts] = useState<string[]>([]);
   const [flashIds, setFlashIds] = useState<ReadonlySet<string>>(new Set());
   const esRef = useRef<EventSource | null>(null);
   const swappedDaysRef = useRef<Set<number>>(new Set());
@@ -1446,6 +1517,8 @@ export default function Home() {
     pendingEditsRef.current = [];
     inFlightEditsRef.current = 0;
     setReflowing(false);
+    setRefining(false);
+    setRefineThoughts([]);
     setFlashIds(new Set());
     setScreen({ kind: "input" });
   }
@@ -1464,6 +1537,7 @@ export default function Home() {
         const res = await fetch(`${API}/modify`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ planId, blockId, newOptionId: optionId }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1496,6 +1570,71 @@ export default function Home() {
     });
   }
 
+  async function handleRefine(message: string) {
+    const currentScreen = screen;
+    if (currentScreen.kind !== "itinerary") return;
+
+    setRefining(true);
+    setRefineThoughts([]);
+
+    try {
+      const response = await fetch(`${API}/plan/refine`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ message, planId: currentScreen.plan.planId }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({})) as { message?: string };
+        throw new Error(err.message ?? `HTTP ${response.status}`);
+      }
+
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop()!;
+
+        for (const chunk of chunks) {
+          if (!chunk.trim()) continue;
+          let eventType = "";
+          let data = "";
+          for (const line of chunk.split("\n")) {
+            if (line.startsWith("event: ")) eventType = line.slice(7);
+            else if (line.startsWith("data: ")) data = line.slice(6);
+          }
+          if (!eventType || !data) continue;
+
+          if (eventType === "thought") {
+            const { text } = JSON.parse(data) as { text: string };
+            setRefineThoughts((prev) => [...prev, text]);
+          } else if (eventType === "partial") {
+            const partial = JSON.parse(data) as TripPlan;
+            setScreen({ kind: "itinerary", plan: partial, generating: false });
+          } else if (eventType === "ready") {
+            const refined = JSON.parse(data) as TripPlan;
+            setScreen({ kind: "itinerary", plan: refined, generating: false });
+          } else if (eventType === "error") {
+            const { message: errMsg } = JSON.parse(data) as { message: string };
+            throw new Error(errMsg);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Refine failed:", err);
+      setRefineThoughts((prev) => [...prev, `Error: ${err instanceof Error ? err.message : String(err)}`]);
+    } finally {
+      setRefining(false);
+    }
+  }
+
   async function handleSubmit(brief: string) {
     const destination = extractDestination(brief);
     const tripType = extractTripType(brief);
@@ -1507,6 +1646,7 @@ export default function Home() {
       const res = await fetch(`${API}/plan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           destination: extractDestination(brief),
           travelerDescription: brief,
@@ -1526,7 +1666,7 @@ export default function Home() {
       return;
     }
 
-    const es = new EventSource(`${API}/plan/${planId}/stream`);
+    const es = new EventSource(`${API}/plan/${planId}/stream`, { withCredentials: true });
     esRef.current = es;
 
     es.addEventListener("thought", (e) => {
@@ -1588,9 +1728,12 @@ export default function Home() {
           plan={screen.plan}
           generating={screen.generating}
           reflowing={reflowing}
+          refining={refining}
+          refineThoughts={refineThoughts}
           flashIds={flashIds}
           onSwap={handleSwap}
           onReset={reset}
+          onRefine={handleRefine}
         />
       )}
       {screen.kind === "error" && <ErrorScreen message={screen.message} onReset={reset} />}

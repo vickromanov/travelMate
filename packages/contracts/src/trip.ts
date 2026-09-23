@@ -8,6 +8,22 @@ import { UserPreferencesSchema } from "./auth.js";
 
 // LLMs return null for missing optional fields — coerce null → undefined everywhere.
 const optStr = () => z.string().nullish().transform((v) => v ?? undefined);
+
+// SEC-5: URL fields must be http(s) or absent — prevents javascript: stored-XSS via plan links.
+const safeUrl = () =>
+  z
+    .string()
+    .nullish()
+    .transform((v) => v ?? undefined)
+    .pipe(
+      z
+        .string()
+        .refine(
+          (v) => !v || /^https?:\/\//i.test(v),
+          { message: "URL must start with http:// or https://" },
+        )
+        .optional(),
+    );
 const optDate = () =>
   z
     .string()
@@ -81,12 +97,13 @@ export const TravelOptionSchema = z.object({
   scheduledTime: optStr(),
   durationMinutes: optNum(z.number().int().positive()),
   bookingRequired: z.boolean().nullish().transform((v) => v ?? undefined),
-  bookingUrl: optStr(),
+  // SEC-5: bookingUrl and link must be http(s) URLs to prevent stored-XSS
+  bookingUrl: safeUrl(),
   openingHours: optStr(),
   phoneNumber: optStr(),
   affiliationRef: optStr(),
   /** Primary clickable link for the card header. Official site, Google Maps, or directions. */
-  link: optStr(),
+  link: safeUrl(),
   /**
    * What the link IS: tickets to buy, a table/room to book, the official site,
    * a map pin, or turn-by-turn directions.

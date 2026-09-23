@@ -15,14 +15,23 @@ setInterval(() => {
   }
 }, CLEANUP_INTERVAL).unref();
 
-export function rateLimit(opts: { max: number; windowMs: number }) {
+/**
+ * SEC-6: Rate limiter with per-user and per-IP keying.
+ * When keyBy is "user", the key is request.user.id (when logged in) or the IP
+ * as fallback — prevents a single user from cycling IPs to bypass limits.
+ */
+export function rateLimit(opts: { max: number; windowMs: number; keyBy?: "ip" | "user" }) {
   return async function rateLimitHandler(request: FastifyRequest, reply: FastifyReply) {
-    const ip = request.ip;
+    const key =
+      opts.keyBy === "user"
+        ? (request.user?.id ?? request.ip)
+        : request.ip;
+
     const now = Date.now();
-    let win = store.get(ip);
+    let win = store.get(key);
     if (!win || win.resetAt <= now) {
       win = { count: 0, resetAt: now + opts.windowMs };
-      store.set(ip, win);
+      store.set(key, win);
     }
     win.count++;
     if (win.count > opts.max) {

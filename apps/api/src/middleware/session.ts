@@ -9,10 +9,8 @@ declare module "fastify" {
   }
 }
 
-const SESSION_COOKIE = "tm_session";
-const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-
-export { SESSION_COOKIE, SESSION_MAX_AGE_MS };
+export const SESSION_COOKIE = "tm_session";
+export const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 export async function sessionMiddleware(request: FastifyRequest, _reply: FastifyReply) {
   request.user = null;
