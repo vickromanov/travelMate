@@ -60,6 +60,14 @@ function block(
   };
 }
 
+function transportBlock(blockId: string, scheduledTime: string, title: string, fromVenue: string, toVenue: string): ItineraryBlock {
+  const b = block(blockId, "TRANSPORT", scheduledTime, title);
+  for (const o of b.options) {
+    o.link = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(fromVenue)}&destination=${encodeURIComponent(toVenue)}&travelmode=transit`;
+  }
+  return b;
+}
+
 function goodDay(dayNumber: number, date: string): DayPlan {
   const d = `d${dayNumber}`;
   return {
@@ -71,10 +79,10 @@ function goodDay(dayNumber: number, date: string): DayPlan {
     blocks: [
       block(`${d}_b1`, "STAYS", "07:00", "Hotel Platzl"),
       block(`${d}_b2`, "DINING", "08:00", "Café Frischhut"),
-      block(`${d}_b3`, "TRANSPORT", "09:15", "U-Bahn to Marienplatz"),
+      transportBlock(`${d}_b3`, "09:15", "U-Bahn to Marienplatz", "Café Frischhut", "Residenz Museum"),
       block(`${d}_b4`, "ACTIVITIES", "10:00", "Residenz Museum"),
       block(`${d}_b5`, "DINING", "12:30", "Augustiner Klosterwirt"),
-      block(`${d}_b6`, "TRANSPORT", "14:00", "Tram to Nymphenburg"),
+      transportBlock(`${d}_b6`, "14:00", "Tram to Nymphenburg", "Augustiner Klosterwirt", "Nymphenburg Palace"),
       block(`${d}_b7`, "ACTIVITIES", "14:30", "Nymphenburg Palace"),
       block(`${d}_b8`, "DINING", "19:30", "Wirtshaus in der Au"),
     ],
@@ -224,6 +232,27 @@ describe("validatePlanQuality — option-level rules", () => {
     const transport = plan.days[0]!.blocks.find((b) => b.category === "TRANSPORT")!;
     transport.options[0]!.link = "https://example.com/some-page";
     expect(validatePlanQuality(plan).issues.some((i) => i.rule === "transport-directions-link")).toBe(true);
+  });
+
+  it("warns when transport directions link does not mention the adjacent venue", () => {
+    const plan = goodPlan(1);
+    // d1_b3 is TRANSPORT between d1_b2 (Café Frischhut) and d1_b4 (Residenz Museum)
+    const transport = plan.days[0]!.blocks.find((b) => b.blockId === "d1_b3")!;
+    const anchor = transport.options.find((o) => o.tier === "ANCHOR")!;
+    // Set a directions link that doesn't mention the adjacent venues
+    anchor.link = "https://www.google.com/maps/dir/?api=1&origin=Wrong+Place&destination=Also+Wrong&travelmode=transit";
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "transport-adjacency")).toBe(true);
+  });
+
+  it("passes when transport directions link mentions adjacent venues", () => {
+    const plan = goodPlan(1);
+    // d1_b3 is TRANSPORT between d1_b2 (Café Frischhut) and d1_b4 (Residenz Museum)
+    const transport = plan.days[0]!.blocks.find((b) => b.blockId === "d1_b3")!;
+    const anchor = transport.options.find((o) => o.tier === "ANCHOR")!;
+    anchor.link = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent("Café Frischhut")}&destination=${encodeURIComponent("Residenz Museum")}&travelmode=transit`;
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "transport-adjacency")).toBe(false);
   });
 });
 
@@ -420,6 +449,139 @@ describe("enforceBudgetBySwaps", () => {
   });
 });
 
+describe("validatePlanQuality — time overlap detection", () => {
+  it("flags overlapping blocks when duration exceeds gap", () => {
+    const plan = goodPlan(1);
+    const activity = plan.days[0]!.blocks.find((b) => b.blockId === "d1_b4")!;
+    const sel = activity.options.find((o) => o.id === activity.selectedOptionId)!;
+    sel.durationMinutes = 180; // 10:00 + 180min = 13:00, but lunch is at 12:30
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "time-overlap")).toBe(true);
+  });
+
+  it("passes when durations fit within gaps", () => {
+    const plan = goodPlan(1);
+    const activity = plan.days[0]!.blocks.find((b) => b.blockId === "d1_b4")!;
+    const sel = activity.options.find((o) => o.id === activity.selectedOptionId)!;
+    sel.durationMinutes = 90; // 10:00 + 90min = 11:30, lunch at 12:30 → fine
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "time-overlap")).toBe(false);
+  });
+
+  it("does not flag when no durationMinutes is set", () => {
+    const report = validatePlanQuality(goodPlan(1));
+    expect(report.issues.some((i) => i.rule === "time-overlap")).toBe(false);
+  });
+});
+
+describe("validatePlanQuality — duplicate venue detection", () => {
+  it("warns when the same activity appears twice across days", () => {
+    const plan = goodPlan(2);
+    // goodPlan reuses activity venues across days — the rule catches it
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "duplicate-venue" && i.severity === "warning")).toBe(true);
+  });
+
+  it("does not flag duplicate STAYS or DINING", () => {
+    const plan = goodPlan(2);
+    // Make each day's activities unique so only STAYS/DINING repeat
+    for (const day of plan.days) {
+      for (const b of day.blocks) {
+        if (b.category === "ACTIVITIES") {
+          const anchor = b.options.find((o) => o.tier === "ANCHOR")!;
+          anchor.title = `${anchor.title} Day${day.dayNumber}`;
+        }
+      }
+    }
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "duplicate-venue")).toBe(false);
+  });
+
+  it("is case-insensitive", () => {
+    const plan = goodPlan(2);
+    const act1 = plan.days[0]!.blocks.find((b) => b.blockId === "d1_b4")!;
+    const act2 = plan.days[1]!.blocks.find((b) => b.blockId === "d2_b4")!;
+    act1.options.find((o) => o.tier === "ANCHOR")!.title = "Residenz Museum";
+    act2.options.find((o) => o.tier === "ANCHOR")!.title = "residenz museum";
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "duplicate-venue")).toBe(true);
+  });
+});
+
+describe("validatePlanQuality — geographic outlier detection", () => {
+  it("flags a venue with coordinates far from the trip center", () => {
+    const plan = goodPlan(2); // Munich coords ~48.13, 11.57
+    const act = plan.days[0]!.blocks.find((b) => b.blockId === "d1_b4")!;
+    const anchor = act.options.find((o) => o.tier === "ANCHOR")!;
+    anchor.location = { lat: 35.6762, lng: 139.6503, address: "Tokyo" }; // ~9,000km away
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "geographic-outlier")).toBe(true);
+  });
+
+  it("passes when all venues are in the same city", () => {
+    const report = validatePlanQuality(goodPlan(2));
+    expect(report.issues.some((i) => i.rule === "geographic-outlier")).toBe(false);
+  });
+});
+
+describe("validatePlanQuality — tier price ordering", () => {
+  it("warns when SMART-VALUE is more expensive than ANCHOR", () => {
+    const plan = goodPlan(1);
+    const b = plan.days[0]!.blocks.find((b) => b.blockId === "d1_b4")!;
+    b.options.find((o) => o.tier === "ANCHOR")!.price = { amount: 20, currency: "EUR" };
+    b.options.find((o) => o.tier === "SMART-VALUE")!.price = { amount: 50, currency: "EUR" };
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "tier-price-order")).toBe(true);
+  });
+
+  it("warns when PREMIUM is cheaper than ANCHOR", () => {
+    const plan = goodPlan(1);
+    const b = plan.days[0]!.blocks.find((b) => b.blockId === "d1_b4")!;
+    b.options.find((o) => o.tier === "ANCHOR")!.price = { amount: 50, currency: "EUR" };
+    b.options.find((o) => o.tier === "PREMIUM")!.price = { amount: 10, currency: "EUR" };
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "tier-price-order")).toBe(true);
+  });
+
+  it("tolerates small price differences (10% margin)", () => {
+    const plan = goodPlan(1);
+    const b = plan.days[0]!.blocks.find((b) => b.blockId === "d1_b4")!;
+    b.options.find((o) => o.tier === "ANCHOR")!.price = { amount: 20, currency: "EUR" };
+    b.options.find((o) => o.tier === "SMART-VALUE")!.price = { amount: 21, currency: "EUR" };
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "tier-price-order")).toBe(false);
+  });
+});
+
+describe("validatePlanQuality — closing time check", () => {
+  it("warns when a visit extends past closing", () => {
+    const plan = goodPlan(1);
+    const act = plan.days[0]!.blocks.find((b) => b.blockId === "d1_b7")!; // 14:30
+    for (const o of act.options) {
+      o.openingHours = "09:00–16:00";
+      o.durationMinutes = 120; // 14:30 + 120 = 16:30, closes at 16:00
+    }
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "past-closing")).toBe(true);
+  });
+
+  it("passes when the visit fits within hours", () => {
+    const plan = goodPlan(1);
+    const act = plan.days[0]!.blocks.find((b) => b.blockId === "d1_b4")!; // 10:00
+    for (const o of act.options) {
+      o.openingHours = "09:00–18:00";
+      o.durationMinutes = 90; // 10:00 + 90 = 11:30, closes at 18:00 → fine
+    }
+    const report = validatePlanQuality(plan);
+    expect(report.issues.some((i) => i.rule === "past-closing")).toBe(false);
+  });
+
+  it("ignores blocks without openingHours", () => {
+    const report = validatePlanQuality(goodPlan(1));
+    expect(report.issues.some((i) => i.rule === "past-closing")).toBe(false);
+  });
+});
+
 describe("formatQualityReport", () => {
   it("summarises issues compactly", () => {
     const plan = goodPlan(1);
@@ -430,6 +592,6 @@ describe("formatQualityReport", () => {
   });
 
   it("reports a clean bill of health", () => {
-    expect(formatQualityReport(validatePlanQuality(goodPlan()))).toContain("passed");
+    expect(formatQualityReport(validatePlanQuality(goodPlan(1)))).toContain("passed");
   });
 });

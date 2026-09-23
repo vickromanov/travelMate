@@ -18,6 +18,7 @@ import { validatePlanQuality, formatQualityReport, enforceBudgetBySwaps } from "
 import { formatResearchForPrompt, type CuratedResearch } from "./curate.js";
 import { buildTripSkeleton, type TripSkeleton, type SkeletonDay } from "./skeleton.js";
 import { verifyDayLinks } from "./verify-links.js";
+import { verifyVenues } from "./verify-venues.js";
 import { enforceConsistency } from "./consistency.js";
 
 /** Minimal TripPlan shell so enforceConsistency can run on a single day. */
@@ -602,14 +603,28 @@ export async function synthesizePlan(
     }
   }
 
-  // Whatever remains goes through ONE scoped LLM repair round
-  if (!report.ok) {
-    cb.onThought(`Quality check found ${report.errors} issue(s) — running a repair pass…`);
+  // Iterative repair: up to 3 rounds until all errors are resolved.
+  const MAX_REPAIR_ROUNDS = 3;
+  for (let round = 1; round <= MAX_REPAIR_ROUNDS && !report.ok; round++) {
+    cb.onThought(`Quality check found ${report.errors} error(s) — repair round ${round}/${MAX_REPAIR_ROUNDS}…`);
     plan = await repairPlan(plan, report.issues, llm, cb, brief);
     sortBlocks(plan);
+    enforceConsistency(plan);
     report = validatePlanQuality(plan, qualityOpts);
+    if (report.ok) {
+      cb.onThought(`Repair round ${round} resolved all errors.`);
+    }
   }
   cb.onThought(formatQualityReport(report, 5));
+
+  // Venue existence verification via Gemini Search Grounding
+  cb.onThought("Verifying venue existence…");
+  const venueCheck = await verifyVenues(plan, brief.facts.destination);
+  if (venueCheck.flagged.length > 0) {
+    cb.onThought(`Venue check: ${venueCheck.checked} venues checked, ${venueCheck.flagged.length} flagged — ${venueCheck.flagged.map((f) => f.message).join("; ")}`);
+  } else if (venueCheck.checked > 0) {
+    cb.onThought(`Venue check: all ${venueCheck.checked} venues verified.`);
+  }
 
   // Final link sweep: covers the batch path and any repaired/replaced days.
   // The origin cache makes re-checking already-verified venues free.

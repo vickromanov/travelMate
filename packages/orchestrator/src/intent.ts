@@ -127,6 +127,45 @@ If NO event/festival/seasonal occasion is referenced, return ONLY:
   }
 }
 
+function sanitizePrefValue(val: string, maxLen = 100): string {
+  return val.replace(/[\x00-\x1f]/g, "").slice(0, maxLen);
+}
+
+function sanitizePrefArray(arr: string[], allowed: ReadonlySet<string>): string[] {
+  return arr.filter(v => allowed.has(v));
+}
+
+const ALLOWED_DIETARY = new Set([
+  "Vegetarian", "Vegan", "Halal", "Kosher",
+  "Gluten-free", "Nut allergy", "Lactose intolerant",
+]);
+const ALLOWED_INTERESTS = new Set([
+  "History", "Food & dining", "Art & museums", "Nature & outdoors",
+  "Nightlife", "Shopping", "Architecture", "Sports & adventure",
+  "Wellness & spa", "Photography", "Local culture", "Music & festivals",
+]);
+const ALLOWED_STYLES = new Set([
+  "Cultural", "Adventure", "Luxury", "Relaxation",
+  "Budget", "Romantic", "Family-friendly",
+]);
+
+function buildPreferencesBlock(input: CrucialInfo): string {
+  const p = input.userPreferences;
+  if (!p) return "";
+  const lines: string[] = [];
+  const dietary = sanitizePrefArray(p.dietaryRestrictions, ALLOWED_DIETARY);
+  if (dietary.length) lines.push(`Dietary restrictions: ${dietary.join(", ")}`);
+  if (p.accessibilityNeeds) lines.push(`Accessibility needs: ${sanitizePrefValue(p.accessibilityNeeds)}`);
+  if (p.travelPace !== "moderate") lines.push(`Travel pace: ${p.travelPace}`);
+  const interests = sanitizePrefArray(p.interests, ALLOWED_INTERESTS);
+  if (interests.length) lines.push(`Interests: ${interests.join(", ")}`);
+  if (p.accommodationStyle !== "no-preference") lines.push(`Accommodation style: ${p.accommodationStyle}`);
+  const styles = sanitizePrefArray(p.travelStyle, ALLOWED_STYLES);
+  if (styles.length) lines.push(`Travel style: ${styles.join(", ")}`);
+  if (!lines.length) return "";
+  return `\nUSER PREFERENCES (from their saved profile — incorporate into travelerProfile):\n${lines.join("\n")}`;
+}
+
 function buildUserPrompt(input: CrucialInfo, eventDates: string | null): string {
   const today = new Date().toISOString().slice(0, 10);
   return `Today's date: ${today}
@@ -144,7 +183,7 @@ End date: ${input.endDate ?? "not specified"}
 Adults: ${input.partyAdults ?? "not specified"}
 Children: ${input.partyChildren ?? "not specified"}
 Free-form text: ${input.freeformText ?? "none"}
-
+${buildPreferencesBlock(input)}
 Extract the trip brief now.`;
 }
 

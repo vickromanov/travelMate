@@ -14,7 +14,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src __tests__",
     "test": "vitest run",
-    "clean": "rm -rf dist .turbo coverage"
+    "clean": "rm -rf dist .turbo coverage",
+    "system-test": "tsx tooling/system-test.ts"
   },
   "dependencies": {
     "@travelmate/contracts": "workspace:*",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@travelmate/config": "workspace:*",
     "@types/node": "^22",
+    "dotenv": "^16.4.7",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }

@@ -28,12 +28,16 @@ export async function startServer(port = Number(process.env.API_PORT ?? 8080)) {
 
   await app.register(cors, {
     origin: process.env.CORS_ORIGIN ?? "http://localhost:3000",
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "OPTIONS"],
     credentials: true,
   });
 
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret && process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET must be set in production");
+  }
   await app.register(cookie, {
-    secret: process.env.SESSION_SECRET ?? "travelmate-dev-secret",
+    secret: sessionSecret ?? "travelmate-dev-secret",
   });
 
   app.addHook("preHandler", sessionMiddleware);

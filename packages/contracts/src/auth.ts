@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BudgetTierSchema } from "./common.js";
 
 export const SignupRequestSchema = z.object({
   email: z.string().email(),
@@ -20,3 +21,18 @@ export const AuthUserSchema = z.object({
   avatarUrl: z.string().nullable(),
 });
 export type AuthUser = z.infer<typeof AuthUserSchema>;
+
+export const UserPreferencesSchema = z.object({
+  dietaryRestrictions: z.array(z.string()).default([]),
+  accessibilityNeeds: z.string().default(""),
+  travelPace: z.enum(["relaxed", "moderate", "packed"]).default("moderate"),
+  interests: z.array(z.string()).default([]),
+  accommodationStyle: z
+    .enum(["hotel", "boutique", "hostel", "apartment", "resort", "no-preference"])
+    .default("no-preference"),
+  travelStyle: z.array(z.string()).default([]),
+  homeCity: z.string().default(""),
+  defaultBudgetTier: BudgetTierSchema.nullable().default(null),
+  preferredCurrency: z.string().default(""),
+});
+export type UserPreferences = z.infer<typeof UserPreferencesSchema>;

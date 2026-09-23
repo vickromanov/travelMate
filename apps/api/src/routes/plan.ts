@@ -6,9 +6,15 @@
 import { randomUUID } from "crypto";
 import { EventEmitter } from "events";
 import type { FastifyInstance } from "fastify";
-import { CrucialInfoSchema, type TripPlan } from "@travelmate/contracts";
+import {
+  CrucialInfoSchema,
+  UserPreferencesSchema,
+  type TripPlan,
+} from "@travelmate/contracts";
+import { getPrisma } from "@travelmate/database";
 import { orchestrate } from "@travelmate/orchestrator";
 import { deps } from "../index.js";
+import { requireAuth } from "../middleware/session.js";
 
 // Per-plan event bus bridging the pipeline callbacks → SSE connections.
 // latestPartial is kept so a client that connects late — or whose EventSource
@@ -43,6 +49,24 @@ export async function planRoutes(app: FastifyInstance) {
       return reply.status(400).send({ code: "INVALID_INPUT", message: String(err) });
     }
 
+    if (request.user && !info.userPreferences) {
+      const prisma = getPrisma();
+      const row = await prisma.user.findUnique({
+        where: { id: request.user.id },
+        select: { preferences: true },
+      });
+      if (row?.preferences) {
+        const prefs = UserPreferencesSchema.safeParse(row.preferences);
+        if (prefs.success) {
+          info = { ...info, userPreferences: prefs.data };
+          if (prefs.data.homeCity && !info.origin) {
+            info = { ...info, origin: prefs.data.homeCity };
+          }
+        }
+      }
+    }
+
+    const userId = request.user?.id ?? null;
     const planId = randomUUID();
     const channel = getChannel(planId);
     const { bus } = channel;
@@ -64,8 +88,25 @@ export async function planRoutes(app: FastifyInstance) {
         unsubscribe();
         planBus.delete(planId);
       },
-    }, planId).then(() => {
-      // Pipeline done — unsubscribe after a brief delay to let SSE drain
+    }, planId).then(async () => {
+      if (userId) {
+        try {
+          const plan = await deps.db.plans.getPlan(planId);
+          if (plan) {
+            const prisma = getPrisma();
+            await prisma.trip.create({
+              data: {
+                userId,
+                title: plan.title ?? info.destination,
+                brief: info.freeformText ?? info.travelerDescription,
+                data: JSON.parse(JSON.stringify(plan)),
+              },
+            });
+          }
+        } catch (err) {
+          console.error("[plan] Failed to save trip:", err);
+        }
+      }
       setTimeout(() => { unsubscribe(); planBus.delete(planId); }, 30_000);
     });
 
@@ -127,8 +168,8 @@ export async function planRoutes(app: FastifyInstance) {
     return reply;
   });
 
-  // GET /plan/:id — fetch saved plan
-  app.get<{ Params: { id: string } }>("/plan/:id", async (request, reply) => {
+  // GET /plan/:id — fetch saved plan (auth required)
+  app.get<{ Params: { id: string } }>("/plan/:id", { preHandler: [requireAuth] }, async (request, reply) => {
     const plan = await deps.db.plans.getPlan(request.params.id);
     if (!plan) return reply.status(404).send({ code: "NOT_FOUND" });
     return reply.send(plan);

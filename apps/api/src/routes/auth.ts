@@ -2,12 +2,17 @@ import type { FastifyInstance } from "fastify";
 import { hash, compare } from "bcryptjs";
 import { Google } from "arctic";
 import { getPrisma } from "@travelmate/database";
-import { SignupRequestSchema, LoginRequestSchema } from "@travelmate/contracts";
+import {
+  SignupRequestSchema,
+  LoginRequestSchema,
+  UserPreferencesSchema,
+} from "@travelmate/contracts";
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE_MS,
   requireAuth,
 } from "../middleware/session.js";
+import { rateLimit } from "../middleware/rate-limit.js";
 
 const BCRYPT_ROUNDS = 12;
 
@@ -38,8 +43,10 @@ function getGoogle(): Google | null {
 }
 
 export async function authRoutes(app: FastifyInstance) {
+  const authRateLimit = rateLimit({ max: 10, windowMs: 60_000 });
+
   // ── POST /auth/signup ──────────────────────────────────────────────
-  app.post("/auth/signup", async (request, reply) => {
+  app.post("/auth/signup", { preHandler: [authRateLimit] }, async (request, reply) => {
     const parsed = SignupRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid input" });
@@ -63,7 +70,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ── POST /auth/login ───────────────────────────────────────────────
-  app.post("/auth/login", async (request, reply) => {
+  app.post("/auth/login", { preHandler: [authRateLimit] }, async (request, reply) => {
     const parsed = LoginRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid input" });
@@ -187,6 +194,30 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.redirect(webUrl);
   });
 
+  // ── GET /auth/preferences ───────────────────────────────────────────
+  app.get("/auth/preferences", { preHandler: [requireAuth] }, async (request) => {
+    const prisma = getPrisma();
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: request.user!.id },
+      select: { preferences: true },
+    });
+    return UserPreferencesSchema.parse(user.preferences ?? {});
+  });
+
+  // ── PUT /auth/preferences ────────────────────────────────────────
+  app.put("/auth/preferences", { preHandler: [requireAuth] }, async (request, reply) => {
+    const parsed = UserPreferencesSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid input" });
+    }
+    const prisma = getPrisma();
+    await prisma.user.update({
+      where: { id: request.user!.id },
+      data: { preferences: JSON.parse(JSON.stringify(parsed.data)) },
+    });
+    return parsed.data;
+  });
+
   // ── GET /auth/trips ────────────────────────────────────────────────
   app.get("/auth/trips", { preHandler: [requireAuth] }, async (request) => {
     const prisma = getPrisma();
@@ -196,5 +227,17 @@ export async function authRoutes(app: FastifyInstance) {
       select: { id: true, title: true, brief: true, createdAt: true },
     });
     return trips;
+  });
+
+  // ── GET /auth/trips/:id ───────────────────────────────────────────
+  app.get<{ Params: { id: string } }>("/auth/trips/:id", { preHandler: [requireAuth] }, async (request, reply) => {
+    const prisma = getPrisma();
+    const trip = await prisma.trip.findUnique({
+      where: { id: request.params.id },
+    });
+    if (!trip || trip.userId !== request.user!.id) {
+      return reply.code(404).send({ error: "Trip not found" });
+    }
+    return trip;
   });
 }

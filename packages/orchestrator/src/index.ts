@@ -22,6 +22,8 @@ export { verifyDayLinks, mapsSearchUrl } from "./verify-links.js";
 export type { LinkReport } from "./verify-links.js";
 export { enforceConsistency, isFreeWalkIn } from "./consistency.js";
 export type { ConsistencyReport } from "./consistency.js";
+export { verifyVenues } from "./verify-venues.js";
+export type { VenueCheckResult } from "./verify-venues.js";
 
 /** Public entrypoint A: build a brand-new plan from user input. */
 export async function orchestrate(
