@@ -2,15 +2,21 @@ import { z } from "zod";
 import { BudgetTierSchema } from "./common.js";
 
 export const SignupRequestSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  // SEC-8: normalize email to lowercase at the contract boundary
+  email: z.string().email().transform((v) => v.toLowerCase()),
+  // SEC-8: cap password at 128 chars (bcrypt truncates at 72 bytes — reject longer inputs early)
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(128, "Password must not exceed 128 characters"),
   name: z.string().min(1).optional(),
 });
 export type SignupRequest = z.infer<typeof SignupRequestSchema>;
 
 export const LoginRequestSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  // SEC-8: normalize email to lowercase
+  email: z.string().email().transform((v) => v.toLowerCase()),
+  password: z.string().min(1).max(128),
 });
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 

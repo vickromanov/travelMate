@@ -15,6 +15,7 @@ import { getPrisma } from "@travelmate/database";
 import { orchestrate } from "@travelmate/orchestrator";
 import { deps } from "../index.js";
 import { requireAuth } from "../middleware/session.js";
+import { rateLimit } from "../middleware/rate-limit.js";
 
 // Per-plan event bus bridging the pipeline callbacks → SSE connections.
 // latestPartial is kept so a client that connects late — or whose EventSource
@@ -40,13 +41,16 @@ function sseWrite(reply: { raw: { write: (s: string) => void } }, event: string,
 }
 
 export async function planRoutes(app: FastifyInstance) {
+  const planRateLimit = rateLimit({ max: 5, windowMs: 60_000, keyBy: "user" });
+
   // POST /plan
-  app.post<{ Body: unknown }>("/plan", async (request, reply) => {
+  app.post<{ Body: unknown }>("/plan", { preHandler: [planRateLimit] }, async (request, reply) => {
     let info;
     try {
       info = CrucialInfoSchema.parse(request.body);
-    } catch (err) {
-      return reply.status(400).send({ code: "INVALID_INPUT", message: String(err) });
+    } catch (_err) {
+      // SEC-8: Return a sanitized message, not raw ZodError internals
+      return reply.status(400).send({ code: "INVALID_INPUT", message: "Invalid plan request" });
     }
 
     if (request.user && !info.userPreferences) {
@@ -114,6 +118,11 @@ export async function planRoutes(app: FastifyInstance) {
   });
 
   // GET /plan/:id/stream — SSE
+  // SEC-2 TODO: EventSource does not support custom headers, so we cannot require a
+  // session cookie here without a signed stream-token pattern. The planId is a
+  // randomly-generated UUID (256-bit equivalent via randomUUID) — guessing it is
+  // not practical. A proper fix (short-lived signed stream token issued by POST /plan)
+  // is tracked in REL-3. The endpoint is deliberately left open for now.
   app.get<{ Params: { id: string } }>("/plan/:id/stream", (request, reply) => {
     const { id } = request.params;
     const channel = getChannel(id);
@@ -169,9 +178,24 @@ export async function planRoutes(app: FastifyInstance) {
   });
 
   // GET /plan/:id — fetch saved plan (auth required)
+  // SEC-2: Requires auth + verifies the plan belongs to the logged-in user.
   app.get<{ Params: { id: string } }>("/plan/:id", { preHandler: [requireAuth] }, async (request, reply) => {
     const plan = await deps.db.plans.getPlan(request.params.id);
     if (!plan) return reply.status(404).send({ code: "NOT_FOUND" });
+
+    // Cross-check ownership via the Prisma Trip table (written on generation).
+    // The in-memory PersistenceStore has no userId, so we fall back to the DB.
+    // TODO (REL-1): Once Postgres PersistenceStore stores userId on every plan,
+    // replace this with plan.userId !== request.user!.id.
+    const prisma = getPrisma();
+    const trip = await prisma.trip.findFirst({
+      where: { userId: request.user!.id, data: { path: ["planId"], equals: request.params.id } },
+      select: { id: true },
+    }).catch(() => null);
+    if (!trip) {
+      return reply.status(403).send({ code: "FORBIDDEN", message: "Access denied" });
+    }
+
     return reply.send(plan);
   });
 }

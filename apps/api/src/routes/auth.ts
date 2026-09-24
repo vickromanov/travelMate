@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { randomBytes } from "crypto";
 import { hash, compare } from "bcryptjs";
 import { Google } from "arctic";
 import { getPrisma } from "@travelmate/database";
@@ -26,10 +27,11 @@ function cookieOpts(maxAge: number) {
   };
 }
 
-async function createSession(userId: string) {
-  const prisma = getPrisma();
+// SEC-7: Generate a 256-bit random session token — not a sequential cuid.
+async function createSession(userId: string, prisma: ReturnType<typeof getPrisma>) {
+  const id = randomBytes(32).toString("hex"); // 64-char hex = 256 bits of entropy
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS);
-  return prisma.session.create({ data: { userId, expiresAt } });
+  return prisma.session.create({ data: { id, userId, expiresAt } });
 }
 
 function getGoogle(): Google | null {
@@ -64,7 +66,9 @@ export async function authRoutes(app: FastifyInstance) {
       data: { email, passwordHash, name: name ?? null },
     });
 
-    const session = await createSession(user.id);
+    // SEC-7: Invalidate any stale sessions before creating a new one
+    await prisma.session.deleteMany({ where: { userId: user.id } }).catch(() => {});
+    const session = await createSession(user.id, prisma);
     reply.setCookie(SESSION_COOKIE, session.id, cookieOpts(SESSION_MAX_AGE_MS));
     return { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl };
   });
@@ -88,7 +92,9 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: "Invalid email or password" });
     }
 
-    const session = await createSession(user.id);
+    // SEC-7: Delete prior sessions on login to prevent session fixation
+    await prisma.session.deleteMany({ where: { userId: user.id } }).catch(() => {});
+    const session = await createSession(user.id, prisma);
     reply.setCookie(SESSION_COOKIE, session.id, cookieOpts(SESSION_MAX_AGE_MS));
     return { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl };
   });
@@ -117,8 +123,10 @@ export async function authRoutes(app: FastifyInstance) {
     if (!google) {
       return reply.code(501).send({ error: "Google OAuth is not configured" });
     }
-    const state = crypto.randomUUID();
-    const codeVerifier = crypto.randomUUID();
+    // SEC-4: Use crypto.randomBytes for PKCE — randomUUID() is only 36 chars,
+    // below RFC 7636's 43-char minimum and not base64url encoded.
+    const state = randomBytes(16).toString("hex");
+    const codeVerifier = randomBytes(32).toString("base64url"); // 43+ chars, URL-safe
     const url = google.createAuthorizationURL(state, codeVerifier, ["openid", "email", "profile"]);
 
     reply.setCookie("tm_oauth_state", state, cookieOpts(10 * 60 * 1000));
@@ -127,71 +135,97 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ── GET /auth/google/callback ──────────────────────────────────────
+  // SEC-4: Wrapped in try/catch; profileRes.ok checked; verified_email required for account linking.
   app.get("/auth/google/callback", async (request, reply) => {
     const google = getGoogle();
     if (!google) {
       return reply.code(501).send({ error: "Google OAuth is not configured" });
     }
 
-    const { code, state } = request.query as Record<string, string>;
-    const savedState = request.cookies.tm_oauth_state;
-    const codeVerifier = request.cookies.tm_code_verifier;
-
-    if (!code || !state || state !== savedState || !codeVerifier) {
-      return reply.code(400).send({ error: "Invalid OAuth callback" });
-    }
-
-    const tokens = await google.validateAuthorizationCode(code, codeVerifier);
-    const accessToken = tokens.accessToken();
-
-    const profileRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const profile = (await profileRes.json()) as {
-      id: string; email: string; name?: string; picture?: string;
-    };
-
-    const prisma = getPrisma();
-
-    let account = await prisma.account.findUnique({
-      where: { provider_providerAccountId: { provider: "google", providerAccountId: profile.id } },
-      include: { user: true },
-    });
-
-    let user;
-    if (account) {
-      user = account.user;
-    } else {
-      user = await prisma.user.findUnique({ where: { email: profile.email } });
-      if (user) {
-        await prisma.account.create({
-          data: { userId: user.id, provider: "google", providerAccountId: profile.id },
-        });
-      } else {
-        user = await prisma.user.create({
-          data: {
-            email: profile.email,
-            name: profile.name ?? null,
-            avatarUrl: profile.picture ?? null,
-            accounts: {
-              create: { provider: "google", providerAccountId: profile.id },
-            },
-          },
-        });
-      }
-    }
-
-    if (profile.picture && !user.avatarUrl) {
-      await prisma.user.update({ where: { id: user.id }, data: { avatarUrl: profile.picture } });
-    }
-
-    const session = await createSession(user.id);
-    reply.setCookie(SESSION_COOKIE, session.id, cookieOpts(SESSION_MAX_AGE_MS));
-    reply.setCookie("tm_oauth_state", "", cookieOpts(0));
-    reply.setCookie("tm_code_verifier", "", cookieOpts(0));
-
     const webUrl = process.env.CORS_ORIGIN ?? "http://localhost:3000";
-    return reply.redirect(webUrl);
+
+    try {
+      const { code, state } = request.query as Record<string, string>;
+      const savedState = request.cookies.tm_oauth_state;
+      const codeVerifier = request.cookies.tm_code_verifier;
+
+      if (!code || !state || state !== savedState || !codeVerifier) {
+        return reply.code(400).send({ error: "Invalid OAuth callback" });
+      }
+
+      const tokens = await google.validateAuthorizationCode(code, codeVerifier);
+      const accessToken = tokens.accessToken();
+
+      const profileRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      // SEC-4: Always check the upstream response status
+      if (!profileRes.ok) {
+        console.error(`[auth] Google profile fetch failed: ${profileRes.status}`);
+        return reply.redirect(`${webUrl}/login?error=google_profile_failed`);
+      }
+
+      const profile = (await profileRes.json()) as {
+        id: string;
+        email: string;
+        name?: string;
+        picture?: string;
+        verified_email?: boolean;
+      };
+
+      const prisma = getPrisma();
+
+      let account = await prisma.account.findUnique({
+        where: { provider_providerAccountId: { provider: "google", providerAccountId: profile.id } },
+        include: { user: true },
+      });
+
+      let user;
+      if (account) {
+        user = account.user;
+      } else {
+        user = await prisma.user.findUnique({ where: { email: profile.email } });
+        if (user) {
+          // SEC-4: Only link to an existing account when Google confirms the email is verified.
+          // An unverified Google email could be spoofed to take over a local account.
+          if (!profile.verified_email) {
+            return reply.redirect(`${webUrl}/login?error=google_email_unverified`);
+          }
+          await prisma.account.create({
+            data: { userId: user.id, provider: "google", providerAccountId: profile.id },
+          });
+        } else {
+          user = await prisma.user.create({
+            data: {
+              email: profile.email,
+              name: profile.name ?? null,
+              avatarUrl: profile.picture ?? null,
+              accounts: {
+                create: { provider: "google", providerAccountId: profile.id },
+              },
+            },
+          });
+        }
+      }
+
+      if (profile.picture && !user.avatarUrl) {
+        await prisma.user.update({ where: { id: user.id }, data: { avatarUrl: profile.picture } });
+      }
+
+      // SEC-7: Delete prior sessions before creating a new one
+      await prisma.session.deleteMany({ where: { userId: user.id } }).catch(() => {});
+      const session = await createSession(user.id, prisma);
+      reply.setCookie(SESSION_COOKIE, session.id, cookieOpts(SESSION_MAX_AGE_MS));
+      reply.setCookie("tm_oauth_state", "", cookieOpts(0));
+      reply.setCookie("tm_code_verifier", "", cookieOpts(0));
+
+      return reply.redirect(webUrl);
+    } catch (err) {
+      // SEC-4: Never let an unhandled OAuth error reach the user as a raw 500
+      console.error("[auth] Google OAuth callback error:", err);
+      return reply.redirect(`${webUrl}/login?error=oauth_failed`);
+    }
   });
 
   // ── GET /auth/preferences ───────────────────────────────────────────

@@ -34,7 +34,7 @@ const SYSTEM = `You are TravelMate's synthesis engine. Generate a complete, zero
 Output ONLY valid JSON — no markdown, no code fences, no comments, no explanation.
 The JSON must be parseable by JSON.parse().`;
 
-const SCHEMA_BLOCK = `
+export const SCHEMA_BLOCK = `
 === CRITICAL BLOCK COUNT REQUIREMENT ===
 Every FULL day MUST contain AT LEAST 8 blocks:
   - 3 × DINING  (breakfast 08:00, lunch 12:30, dinner 19:30)
@@ -444,7 +444,7 @@ function addDays(dateStr: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function extractJSON(text: string): string {
+export function extractJSON(text: string): string {
   // Strip any accidental markdown code fences
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced?.[1]) return fenced[1].trim();

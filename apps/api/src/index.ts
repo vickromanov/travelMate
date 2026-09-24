@@ -16,6 +16,7 @@ import { createLLMClient } from "@travelmate/llm";
 import type { Deps } from "@travelmate/orchestrator";
 import { planRoutes } from "./routes/plan.js";
 import { modifyRoutes } from "./routes/modify.js";
+import { refineRoutes } from "./routes/refine.js";
 import { authRoutes } from "./routes/auth.js";
 import { sessionMiddleware } from "./middleware/session.js";
 
@@ -44,6 +45,7 @@ export async function startServer(port = Number(process.env.API_PORT ?? 8080)) {
 
   await app.register(planRoutes);
   await app.register(modifyRoutes);
+  await app.register(refineRoutes);
   await app.register(authRoutes);
 
   app.get("/health", async () => ({ status: "ok" }));
