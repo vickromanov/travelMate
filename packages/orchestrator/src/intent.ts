@@ -166,7 +166,18 @@ function buildPreferencesBlock(input: CrucialInfo): string {
   return `\nUSER PREFERENCES (from their saved profile — incorporate into travelerProfile):\n${lines.join("\n")}`;
 }
 
-function buildUserPrompt(input: CrucialInfo, eventDates: string | null): string {
+interface MemoryFact {
+  category: string;
+  fact: string;
+}
+
+function buildMemoriesBlock(memories?: MemoryFact[]): string {
+  if (!memories || memories.length === 0) return "";
+  const lines = memories.map((m) => `  - [${m.category}] ${m.fact}`);
+  return `\nKNOWN FACTS ABOUT THIS TRAVELER (from previous trips — incorporate into travelerProfile):\n${lines.join("\n")}`;
+}
+
+function buildUserPrompt(input: CrucialInfo, eventDates: string | null, memories?: MemoryFact[]): string {
   const today = new Date().toISOString().slice(0, 10);
   return `Today's date: ${today}
 
@@ -183,7 +194,7 @@ End date: ${input.endDate ?? "not specified"}
 Adults: ${input.partyAdults ?? "not specified"}
 Children: ${input.partyChildren ?? "not specified"}
 Free-form text: ${input.freeformText ?? "none"}
-${buildPreferencesBlock(input)}
+${buildPreferencesBlock(input)}${buildMemoriesBlock(memories)}
 Extract the trip brief now.`;
 }
 
@@ -191,6 +202,7 @@ export async function extractIntent(
   input: CrucialInfo,
   llm: LLMClient,
   cb: StreamCallbacks,
+  memories?: MemoryFact[],
 ): Promise<TripBrief> {
   cb.onThought(`Understanding your trip to ${input.destination}…`);
 
@@ -202,7 +214,7 @@ export async function extractIntent(
       stage: "intent",
       system: SYSTEM,
       cacheableContext: CACHEABLE_SCHEMA,
-      user: buildUserPrompt(input, eventDates),
+      user: buildUserPrompt(input, eventDates, memories),
     },
     (text) => {
       try { JSON.parse(text); return true; } catch { return false; }

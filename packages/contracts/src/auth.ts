@@ -1,6 +1,32 @@
 import { z } from "zod";
 import { BudgetTierSchema } from "./common.js";
 
+export const MEMORY_CATEGORIES = [
+  "travel_party",
+  "dietary",
+  "interests",
+  "constraints",
+  "home_base",
+  "general",
+] as const;
+export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
+
+export const MemoryEntrySchema = z.object({
+  id: z.string(),
+  category: z.enum(MEMORY_CATEGORIES),
+  fact: z.string().min(1).max(500),
+  source: z.string().max(500).default(""),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type MemoryEntry = z.infer<typeof MemoryEntrySchema>;
+
+export const MemoryEntryInputSchema = z.object({
+  category: z.enum(MEMORY_CATEGORIES),
+  fact: z.string().min(1).max(500),
+});
+export type MemoryEntryInput = z.infer<typeof MemoryEntryInputSchema>;
+
 export const SignupRequestSchema = z.object({
   // SEC-8: normalize email to lowercase at the contract boundary
   email: z.string().email().transform((v) => v.toLowerCase()),

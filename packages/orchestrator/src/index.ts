@@ -3,7 +3,7 @@
  * Database. NEVER imported by the UX (import matrix, projectStructure.md §2).
  */
 import type { CrucialInfo, PlanEdit, StreamCallbacks } from "@travelmate/contracts";
-import { runPlanPipeline, type Deps } from "./pipeline.js";
+import { runPlanPipeline, type Deps, type PipelineOptions } from "./pipeline.js";
 import { reflow, type ReflowResult } from "./reflow.js";
 
 export * from "./pipeline.js";
@@ -26,15 +26,17 @@ export { enforceConsistency, isFreeWalkIn } from "./consistency.js";
 export type { ConsistencyReport } from "./consistency.js";
 export { verifyVenues } from "./verify-venues.js";
 export type { VenueCheckResult } from "./verify-venues.js";
+export { extractMemories } from "./memory.js";
+export type { ExtractedMemory } from "./memory.js";
 
 /** Public entrypoint A: build a brand-new plan from user input. */
 export async function orchestrate(
   input: CrucialInfo,
   deps: Deps,
   cb: StreamCallbacks,
-  planId?: string,
+  planIdOrOpts?: string | PipelineOptions,
 ): Promise<void> {
-  return runPlanPipeline(input, deps, cb, planId);
+  return runPlanPipeline(input, deps, cb, planIdOrOpts);
 }
 
 /** Public entrypoint B: apply one edit via scoped re-flow (H4). */

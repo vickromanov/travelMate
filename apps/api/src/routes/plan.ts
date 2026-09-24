@@ -10,9 +10,10 @@ import {
   CrucialInfoSchema,
   UserPreferencesSchema,
   type TripPlan,
+  type MemoryEntry,
 } from "@travelmate/contracts";
 import { getPrisma } from "@travelmate/database";
-import { orchestrate } from "@travelmate/orchestrator";
+import { orchestrate, extractMemories } from "@travelmate/orchestrator";
 import { deps } from "../index.js";
 import { requireAuth } from "../middleware/session.js";
 import { rateLimit } from "../middleware/rate-limit.js";
@@ -53,13 +54,15 @@ export async function planRoutes(app: FastifyInstance) {
       return reply.status(400).send({ code: "INVALID_INPUT", message: "Invalid plan request" });
     }
 
-    if (request.user && !info.userPreferences) {
+    let userMemories: Array<{ category: string; fact: string }> = [];
+
+    if (request.user) {
       const prisma = getPrisma();
       const row = await prisma.user.findUnique({
         where: { id: request.user.id },
-        select: { preferences: true },
+        select: { preferences: true, memories: true },
       });
-      if (row?.preferences) {
+      if (row?.preferences && !info.userPreferences) {
         const prefs = UserPreferencesSchema.safeParse(row.preferences);
         if (prefs.success) {
           info = { ...info, userPreferences: prefs.data };
@@ -67,6 +70,10 @@ export async function planRoutes(app: FastifyInstance) {
             info = { ...info, origin: prefs.data.homeCity };
           }
         }
+      }
+      if (Array.isArray(row?.memories)) {
+        userMemories = (row.memories as MemoryEntry[])
+          .map((m) => ({ category: m.category, fact: m.fact }));
       }
     }
 
@@ -92,7 +99,7 @@ export async function planRoutes(app: FastifyInstance) {
         unsubscribe();
         planBus.delete(planId);
       },
-    }, planId).then(async () => {
+    }, { planId, memories: userMemories }).then(async () => {
       if (userId) {
         try {
           const plan = await deps.db.plans.getPlan(planId);
@@ -113,6 +120,41 @@ export async function planRoutes(app: FastifyInstance) {
       }
       setTimeout(() => { unsubscribe(); planBus.delete(planId); }, 30_000);
     });
+
+    // Fire-and-forget: extract memories from the trip description (non-blocking)
+    if (userId) {
+      const tripText = `${info.destination} ${info.travelerDescription} ${info.freeformText ?? ""}`.trim();
+      void (async () => {
+        try {
+          const prisma = getPrisma();
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { memories: true },
+          });
+          const existing = Array.isArray(user?.memories)
+            ? (user.memories as MemoryEntry[])
+            : [];
+          const extracted = await extractMemories(tripText, existing, deps.llm);
+          if (extracted.length === 0) return;
+          const now = new Date().toISOString();
+          const newEntries: MemoryEntry[] = extracted.map((e) => ({
+            id: randomUUID(),
+            category: e.category,
+            fact: e.fact,
+            source: "auto",
+            createdAt: now,
+            updatedAt: now,
+          }));
+          const merged = [...existing, ...newEntries].slice(0, 50);
+          await prisma.user.update({
+            where: { id: userId },
+            data: { memories: JSON.parse(JSON.stringify(merged)) },
+          });
+        } catch (err) {
+          console.error("[plan] Memory extraction failed (non-critical):", err);
+        }
+      })();
+    }
 
     return reply.send({ planId });
   });
