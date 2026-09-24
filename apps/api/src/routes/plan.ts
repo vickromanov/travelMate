@@ -137,6 +137,7 @@ export async function planRoutes(app: FastifyInstance) {
     const allowed = process.env.CORS_ORIGIN ?? "http://localhost:3000";
     if (origin === allowed) {
       reply.raw.setHeader("Access-Control-Allow-Origin", allowed);
+      reply.raw.setHeader("Access-Control-Allow-Credentials", "true");
     }
     reply.raw.flushHeaders?.();
 
