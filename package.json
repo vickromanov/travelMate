@@ -16,6 +16,7 @@
     "test": "turbo run test",
     "test:contracts": "turbo run test --filter=...[HEAD] -- --testNamePattern=contract",
     "test:system": "tsx tooling/system-test.ts",
+    "smoke": "tsx tooling/smoke-providers.ts",
     "e2e": "turbo run e2e",
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write .",
