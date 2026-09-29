@@ -793,7 +793,7 @@ function ItineraryScreen({ plan, generating, reflowing, refining, refineThoughts
         <div style={{ position: "relative", zIndex: 2, height: "100%", display: "flex", flexDirection: "column", maxWidth: 900, margin: "0 auto", padding: "0 28px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 24 }}>
             <div style={{ fontSize: 11, letterSpacing: 3, textTransform: "uppercase", fontWeight: 800, color: "rgba(255,255,255,0.7)" }}>✈ TravelMate</div>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button onClick={handleExportPdf} disabled={exporting || generating} className="hero-chip" style={{
                 padding: "8px 18px",
                 background: exporting || generating ? "rgba(255,255,255,0.18)" : "var(--accent)",
@@ -806,6 +806,7 @@ function ItineraryScreen({ plan, generating, reflowing, refining, refineThoughts
                 border: "1px solid rgba(255,255,255,0.3)", borderRadius: 999,
                 color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
               }}>+ New trip</button>
+              <UserMenu />
             </div>
           </div>
 
@@ -1275,9 +1276,11 @@ export default function PlanPage() {
 
   return (
     <>
-      <div style={{ position: "fixed", top: 16, right: 20, zIndex: 200 }}>
-        <UserMenu />
-      </div>
+      {screen.kind !== "itinerary" && (
+        <div style={{ position: "fixed", top: 16, right: 20, zIndex: 200 }}>
+          <UserMenu />
+        </div>
+      )}
       {screen.kind === "loading" && <LoadingScreen />}
       {screen.kind === "thinking" && <ThinkingScreen thoughts={screen.thoughts} destination={screen.destination} tripType={screen.tripType} />}
       {screen.kind === "itinerary" && (
