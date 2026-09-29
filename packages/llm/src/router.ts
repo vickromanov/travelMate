@@ -32,34 +32,35 @@ export const MODEL_ROUTING: Record<LLMStage, ModelCandidate[]> = {
   intent: [
     { provider: "groq", model: "openai/gpt-oss-20b" },
     { provider: "groq", model: "openai/gpt-oss-120b" },
+    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
     { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { provider: "gemini", model: "gemini-3.5-flash" },
-    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
   ],
   "fetch-planner": [
     { provider: "groq", model: "openai/gpt-oss-20b" },
+    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
     { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { provider: "gemini", model: "gemini-3.5-flash" },
-    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
   ],
   synthesis: [
     { provider: "groq", model: "openai/gpt-oss-120b" },
     { provider: "groq", model: "qwen/qwen3.8-27b" },
+    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
     { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { provider: "gemini", model: "gemini-3.8-flash" },
-    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
   ],
   reflow: [
     { provider: "groq", model: "openai/gpt-oss-20b" },
     { provider: "groq", model: "openai/gpt-oss-120b" },
+    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
     { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { provider: "gemini", model: "gemini-3.5-flash" },
   ],
   qa: [
     { provider: "groq", model: "openai/gpt-oss-20b" },
+    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
     { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { provider: "gemini", model: "gemini-3.5-flash" },
-    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
   ],
 };
 
