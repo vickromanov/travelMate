@@ -56,6 +56,7 @@ function buildMultiProviderClient(): LLMClient {
           const result = await chatComplete(provider, model, messages, {
             maxTokens: params.maxOutputTokens,
             temperature: params.temperature,
+            timeoutMs: params.timeoutMs,
           });
 
           const tier: ModelTier = inferTier(req.stage, i);

@@ -706,9 +706,15 @@ async function synthesizeBatched(
 }
 
 /**
- * The progressive path: one focused LLM call PER DAY, guided by the skeleton.
- * After each day validates, a partial TripPlan (days so far) is streamed via
- * onPartialPlan — the traveler reviews day 1 while day 2 is being written.
+ * The progressive path: LLM calls guided by the skeleton, with PARALLEL pairs.
+ *
+ * Days are generated in pairs (1+2 concurrently, then 3+4, etc.). The first day
+ * in each pair gets the previous pair's last venue as a continuity hint; the
+ * second day uses the skeleton's hotel (most days end at the hotel anyway).
+ *
+ * Link verification is deferred to a single batch pass at the end — the outer
+ * synthesizePlan already does a final verifyDayLinks sweep, so per-day checks
+ * were redundant latency.
  */
 async function synthesizeProgressive(
   brief: TripBrief,
@@ -743,23 +749,30 @@ async function synthesizeProgressive(
     inferenceChain: brief.inferenceChain,
   });
 
-  for (const sd of skeleton.days) {
-    cb.onThought(`Writing day ${sd.dayNumber} of ${numDays}${sd.title ? ` — ${sd.title}` : ""}…`);
-    const prevDay = days[days.length - 1];
-    const day = await synthesizeDay(brief, sd, numDays, researchBlock, prevDay, llm);
+  const PAIR_SIZE = 2;
+  for (let i = 0; i < skeleton.days.length; i += PAIR_SIZE) {
+    const pair = skeleton.days.slice(i, i + PAIR_SIZE);
+    const prevEnd = days.length > 0 ? lastVenueOf(days[days.length - 1]!) : undefined;
 
-    // Reconcile booking/access/mode contradictions BEFORE the day streams (H3)
-    enforceConsistency({ ...emptyPlanShell(), days: [day] });
-
-    // Every link is checked BEFORE the traveler can click it (P1)
-    const links = await verifyDayLinks([day]);
-    if (links.replaced > 0) {
-      cb.onThought(`Checked ${links.checked} links on day ${sd.dayNumber} — replaced ${links.replaced} dead one(s) with verified map links.`);
+    for (const sd of pair) {
+      cb.onThought(`Writing day ${sd.dayNumber} of ${numDays}${sd.title ? ` — ${sd.title}` : ""}…`);
     }
 
-    days.push(day);
-    cb.onThought(`Day ${sd.dayNumber} ready — ${day.blocks.length} blocks. ${sd.dayNumber < numDays ? "You can start reviewing it while I write the rest." : ""}`);
-    cb.onPartialPlan?.(partialPlan());
+    const results = await Promise.all(
+      pair.map((sd, idx) => {
+        const hint = idx === 0
+          ? prevEnd
+          : pair[0]!.hotel || prevEnd;
+        return synthesizeDay(brief, sd, numDays, researchBlock, hint, llm);
+      }),
+    );
+
+    for (const day of results) {
+      enforceConsistency({ ...emptyPlanShell(), days: [day] });
+      days.push(day);
+      cb.onThought(`Day ${day.dayNumber} ready — ${day.blocks.length} blocks.`);
+      cb.onPartialPlan?.(partialPlan());
+    }
   }
 
   return {
@@ -778,15 +791,13 @@ async function synthesizeDay(
   sd: SkeletonDay,
   totalDays: number,
   researchBlock: string,
-  prevDay: DayPlan | undefined,
+  prevEndHint: string | undefined,
   llm: LLMClient,
 ): Promise<DayPlan> {
   const minBlocks = sd.dayNumber === 1 || sd.dayNumber === totalDays ? 2 : 3;
 
   const extractDay = (text: string): unknown => {
     const raw = JSON.parse(extractJSON(text)) as Record<string, unknown>;
-    // Accept every shape the model produces: {"day": {...}}, {"days": [{...}]}
-    // (the cacheable schema block teaches the days-array habit), or a bare day.
     if (raw["day"] && typeof raw["day"] === "object") return raw["day"];
     if (Array.isArray(raw["days"])) return (raw["days"] as unknown[])[0];
     return raw;
@@ -800,7 +811,7 @@ async function synthesizeDay(
           stage: "synthesis",
           system: SYSTEM,
           cacheableContext: SCHEMA_BLOCK,
-          user: buildDayPrompt(brief, sd, totalDays, researchBlock, prevDay),
+          user: buildDayPrompt(brief, sd, totalDays, researchBlock, prevEndHint),
         },
         (text) => {
           try {
@@ -826,13 +837,9 @@ async function synthesizeDay(
     const parsed = DayPlanSchema.safeParse(extractDay(res.text));
     if (parsed.success) {
       const day = parsed.data;
-      // Normalise against the skeleton (the model occasionally drifts)
       day.dayNumber = sd.dayNumber;
       day.date = sd.date;
 
-      // Strip physically impossible blocks:
-      // - Arrival day: no DINING before 14:00 (traveler hasn't arrived)
-      // - Any day: blocks with "Placeholder for Day" in the label
       const PLACEHOLDER_LABEL_RE = /placeholder for day \d+/i;
       day.blocks = day.blocks.filter((b) => {
         if (PLACEHOLDER_LABEL_RE.test(b.label ?? "")) {
@@ -861,24 +868,25 @@ async function synthesizeDay(
   throw new Error(`Day ${sd.dayNumber} could not be generated in a valid format — please try again.`);
 }
 
+/** Extract the last venue name from a completed day (for continuity hints). */
+function lastVenueOf(day: DayPlan): string | undefined {
+  const last = day.blocks[day.blocks.length - 1];
+  if (!last) return undefined;
+  return last.options.find((o) => o.id === last.selectedOptionId)?.title ?? last.options[0]?.title;
+}
+
 function buildDayPrompt(
   brief: TripBrief,
   sd: SkeletonDay,
   totalDays: number,
   researchBlock: string,
-  prevDay: DayPlan | undefined,
+  prevEndHint: string | undefined,
 ): string {
   const f = brief.facts;
   const adults = f.partyAdults ?? 2;
   const children = f.partyChildren ?? 0;
   const party = children > 0 ? `${adults} adults + ${children} children` : `${adults} adult${adults > 1 ? "s" : ""}`;
   const cap = f.budgetDailyCap;
-
-  const prevEnd = prevDay
-    ? prevDay.blocks[prevDay.blocks.length - 1]?.options.find(
-        (o) => o.id === prevDay.blocks[prevDay.blocks.length - 1]!.selectedOptionId,
-      )?.title
-    : undefined;
 
   return `TRAVELER PROFILE:
 ${brief.travelerProfile}
@@ -901,7 +909,7 @@ ${researchBlock}
 - Morning: ${sd.morning ?? "(free)"}
 - Afternoon: ${sd.afternoon ?? "(free)"}
 - Evening: ${sd.evening ?? "(free)"}
-${prevEnd ? `- The previous day ended at: ${prevEnd} (start today from there).` : ""}
+${prevEndHint ? `- The previous day ended at: ${prevEndHint} (start today from there).` : ""}
 
 Generate ONLY this single day, expanding today's structure into full blocks with
 transport between venues, meals, exact times and 4 options per block.

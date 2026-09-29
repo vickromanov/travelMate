@@ -69,14 +69,17 @@ export const MODEL_ROUTING: Record<LLMStage, ModelCandidate[]> = {
 export interface StageParams {
   maxOutputTokens: number;
   temperature: number;
+  /** Per-attempt timeout in ms. Shorter for small-output stages so a hanging
+   *  provider is abandoned quickly and the cascade moves on. */
+  timeoutMs: number;
 }
 
 export const STAGE_PARAMS: Record<LLMStage, StageParams> = {
-  intent: { maxOutputTokens: 4096, temperature: 0.3 },
-  "fetch-planner": { maxOutputTokens: 4096, temperature: 0.3 },
-  synthesis: { maxOutputTokens: 16384, temperature: 0.7 },
-  reflow: { maxOutputTokens: 4096, temperature: 0.3 },
-  qa: { maxOutputTokens: 4096, temperature: 0.3 },
+  intent: { maxOutputTokens: 4096, temperature: 0.3, timeoutMs: 30_000 },
+  "fetch-planner": { maxOutputTokens: 4096, temperature: 0.3, timeoutMs: 45_000 },
+  synthesis: { maxOutputTokens: 16384, temperature: 0.7, timeoutMs: 60_000 },
+  reflow: { maxOutputTokens: 4096, temperature: 0.3, timeoutMs: 30_000 },
+  qa: { maxOutputTokens: 4096, temperature: 0.3, timeoutMs: 30_000 },
 };
 
 // ── Tier inference (for response metadata) ──────────────────────────────────

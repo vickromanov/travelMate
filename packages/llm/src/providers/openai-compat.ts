@@ -75,13 +75,13 @@ function parseRetryAfter(header: string | null): number | undefined {
   return undefined;
 }
 
-const REQUEST_TIMEOUT_MS = 120_000;
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 export async function chatComplete(
   providerId: string,
   model: string,
   messages: Array<{ role: string; content: string }>,
-  opts: { maxTokens: number; temperature: number },
+  opts: { maxTokens: number; temperature: number; timeoutMs?: number },
 ): Promise<ChatResult> {
   const cfg = PROVIDERS[providerId];
   if (!cfg) throw new ProviderError(`Unknown provider "${providerId}"`, "fatal");
@@ -89,9 +89,10 @@ export async function chatComplete(
   const apiKey = process.env[cfg.envKey];
   if (!apiKey) throw new ProviderError(`${cfg.envKey} is not set`, "fatal");
 
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const url = `${cfg.baseUrl}/chat/completions`;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   let res: Response;
   try {
@@ -113,7 +114,7 @@ export async function chatComplete(
     clearTimeout(timer);
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("abort")) {
-      throw new ProviderError(`${cfg.name}/${model}: request timed out after ${REQUEST_TIMEOUT_MS}ms`, "retryable");
+      throw new ProviderError(`${cfg.name}/${model}: request timed out after ${timeoutMs}ms`, "retryable");
     }
     throw new ProviderError(`${cfg.name}/${model}: network error — ${msg}`, "retryable");
   } finally {
