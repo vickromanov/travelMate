@@ -29,7 +29,7 @@ export async function startServer(port = Number(process.env.API_PORT ?? 8080)) {
 
   await app.register(cors, {
     origin: process.env.CORS_ORIGIN ?? "http://localhost:3000",
-    methods: ["GET", "POST", "PUT", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
   });
 

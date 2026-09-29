@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { hash, compare } from "bcryptjs";
 import { Google } from "arctic";
 import { getPrisma } from "@travelmate/database";
@@ -7,6 +7,9 @@ import {
   SignupRequestSchema,
   LoginRequestSchema,
   UserPreferencesSchema,
+  MemoryEntrySchema,
+  MemoryEntryInputSchema,
+  type MemoryEntry,
 } from "@travelmate/contracts";
 import {
   SESSION_COOKIE,
@@ -273,5 +276,92 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Trip not found" });
     }
     return trip;
+  });
+
+  // ── GET /auth/memories ──────────────────────────────────────────────
+  app.get("/auth/memories", { preHandler: [requireAuth] }, async (request) => {
+    const prisma = getPrisma();
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: request.user!.id },
+      select: { memories: true },
+    });
+    const raw = user.memories as unknown[];
+    return Array.isArray(raw) ? raw : [];
+  });
+
+  // ── PUT /auth/memories ──────────────────────────────────────────────
+  app.put("/auth/memories", { preHandler: [requireAuth] }, async (request, reply) => {
+    const body = request.body as { memories?: unknown[] };
+    if (!Array.isArray(body?.memories)) {
+      return reply.code(400).send({ error: "Expected { memories: [...] }" });
+    }
+    if (body.memories.length > 50) {
+      return reply.code(400).send({ error: "Maximum 50 memories" });
+    }
+    const parsed: MemoryEntry[] = [];
+    for (const item of body.memories) {
+      const result = MemoryEntrySchema.safeParse(item);
+      if (!result.success) {
+        return reply.code(400).send({ error: result.error.issues[0]?.message ?? "Invalid memory entry" });
+      }
+      parsed.push(result.data);
+    }
+    const prisma = getPrisma();
+    await prisma.user.update({
+      where: { id: request.user!.id },
+      data: { memories: JSON.parse(JSON.stringify(parsed)) },
+    });
+    return parsed;
+  });
+
+  // ── POST /auth/memories ─────────────────────────────────────────────
+  app.post("/auth/memories", { preHandler: [requireAuth] }, async (request, reply) => {
+    const parsed = MemoryEntryInputSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid input" });
+    }
+    const prisma = getPrisma();
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: request.user!.id },
+      select: { memories: true },
+    });
+    const existing = Array.isArray(user.memories) ? (user.memories as MemoryEntry[]) : [];
+    if (existing.length >= 50) {
+      return reply.code(400).send({ error: "Maximum 50 memories reached" });
+    }
+    const now = new Date().toISOString();
+    const entry: MemoryEntry = {
+      id: randomUUID(),
+      category: parsed.data.category,
+      fact: parsed.data.fact,
+      source: "",
+      createdAt: now,
+      updatedAt: now,
+    };
+    const updated = [...existing, entry];
+    await prisma.user.update({
+      where: { id: request.user!.id },
+      data: { memories: JSON.parse(JSON.stringify(updated)) },
+    });
+    return entry;
+  });
+
+  // ── DELETE /auth/memories/:id ───────────────────────────────────────
+  app.delete<{ Params: { id: string } }>("/auth/memories/:id", { preHandler: [requireAuth] }, async (request, reply) => {
+    const prisma = getPrisma();
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: request.user!.id },
+      select: { memories: true },
+    });
+    const existing = Array.isArray(user.memories) ? (user.memories as MemoryEntry[]) : [];
+    const filtered = existing.filter((m) => m.id !== request.params.id);
+    if (filtered.length === existing.length) {
+      return reply.code(404).send({ error: "Memory not found" });
+    }
+    await prisma.user.update({
+      where: { id: request.user!.id },
+      data: { memories: JSON.parse(JSON.stringify(filtered)) },
+    });
+    return { ok: true };
   });
 }

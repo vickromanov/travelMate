@@ -25,15 +25,23 @@ export interface Deps {
  *   3  synthesizePlan — composes from the curated candidates
  *   4  db.plans.savePlan()  ← last write; observer notifies the UX
  */
+export interface PipelineOptions {
+  planId?: string;
+  memories?: Array<{ category: string; fact: string }>;
+}
+
 export async function runPlanPipeline(
   input: CrucialInfo,
   deps: Deps,
   cb: StreamCallbacks,
-  planId?: string,
+  planIdOrOpts?: string | PipelineOptions,
 ): Promise<void> {
+  const opts: PipelineOptions = typeof planIdOrOpts === "string"
+    ? { planId: planIdOrOpts }
+    : planIdOrOpts ?? {};
   try {
     // Stage 1: intent
-    const brief = await extractIntent(input, deps.llm, cb);
+    const brief = await extractIntent(input, deps.llm, cb, opts.memories);
 
     // Stage 2a: fetch (MVP: empty)
     const fetchPlan = await buildFetchPlan(brief);
@@ -43,7 +51,7 @@ export async function runPlanPipeline(
     const research = await curateResearch(brief, deps.llm, cb);
 
     // Stage 3: synthesis — use caller-supplied planId so observer subscription matches
-    const plan = await synthesizePlan(brief, data, research, deps.llm, cb, planId);
+    const plan = await synthesizePlan(brief, data, research, deps.llm, cb, opts.planId);
 
     // Stage 4: persist + notify (order matters — save before notify)
     await deps.db.plans.savePlan(plan);

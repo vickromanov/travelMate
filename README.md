@@ -29,19 +29,49 @@
 | `packages/ui` | shared | Presentational components. |
 | `packages/config` | shared | tsconfig / eslint / prettier / vitest presets. |
 
-## Develop
+## Setup
+
+### 1. Install
 
 ```bash
 nvm use            # Node from .nvmrc
 corepack enable    # pnpm from package.json "packageManager"
 pnpm install
+```
 
+### 2. LLM provider keys
+
+Copy `.env.example` to `.env.local` and add API keys. The LLM layer routes
+across five free-tier OpenAI-compatible providers — missing keys are skipped:
+
+| Provider | Env var | Free-tier signup |
+|---|---|---|
+| **Groq** | `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) |
+| **Gemini** | `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com) |
+| **NVIDIA NIM** | `NVIDIA_API_KEY` | [build.nvidia.com](https://build.nvidia.com) |
+| **OpenRouter** | `OPENROUTER_API_KEY` | [openrouter.ai](https://openrouter.ai) |
+| **Hugging Face** | `HF_API_KEY` | [huggingface.co](https://huggingface.co/settings/tokens) |
+
+At least one key is required. The routing table (`packages/llm/src/router.ts`)
+controls which provider+model handles each pipeline stage, with automatic
+fallback on 429, 5xx, or timeout.
+
+### 3. Verify
+
+```bash
+pnpm smoke         # one cheap call per provider — shows which work
+```
+
+## Develop
+
+```bash
 pnpm typecheck     # tsc across the graph
 pnpm lint          # incl. tier import-boundary enforcement
 pnpm test          # vitest unit + contract tests
 pnpm test:contracts
+pnpm smoke         # provider connectivity check
 pnpm build         # turbo build graph
-pnpm dev           # run apps in dev (once implemented)
+pnpm dev           # run apps in dev
 ```
 
 Everything runs through Turborepo and only re-runs the packages a change affects.

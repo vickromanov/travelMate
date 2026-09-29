@@ -14,6 +14,7 @@ model User {
   name         String?
   avatarUrl    String?
   preferences  Json?     @default("{}")
+  memories     Json      @default("[]")
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   sessions     Session[]

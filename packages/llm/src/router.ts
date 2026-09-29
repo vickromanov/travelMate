@@ -1,46 +1,105 @@
 /**
  * THE ONLY PLACE MODEL IDS APPEAR IN THE CODEBASE. projectStructure.md §7.4.
  *
- * Each Orchestrator stage declares the cheapest capable tier and escalates only
- * on a *validated* failure. Changing a model = a one-file, ADR-recorded change.
+ * MODEL_ROUTING maps each pipeline stage to an ordered list of (provider, model)
+ * candidates — smallest sufficient model first. On error (429, 5xx, timeout)
+ * the next candidate is tried automatically.
  */
 import type { LLMStage, ModelTier } from "@travelmate/contracts";
 
-/** Concrete model per (provider, tier) — used by Anthropic. Gemini uses GEMINI_CASCADE instead. */
-export const MODEL_TABLE: Record<string, Record<ModelTier, string>> = {
-  anthropic: {
-    fast: "claude-haiku-4-5-20251001",
-    mid: "claude-sonnet-4-6",
-    frontier: "claude-opus-4-8",
-  },
-  mock: { fast: "mock", mid: "mock", frontier: "mock" },
-};
+// ── Model routing table ─────────────────────────────────────────────────────
+
+export interface ModelCandidate {
+  provider: "groq" | "gemini" | "nvidia" | "openrouter" | "huggingface";
+  model: string;
+}
 
 /**
- * Gemini free-tier cascade — ordered by RPD capacity to maximise daily throughput.
- * On any error (503, 429, 404, fetch-fail) → skip to next model.
- * Updated 2026-06-24 from API rate-limit dashboard (TravelMateVictor project).
+ * Per-stage candidate lists. Cheapest / fastest first; quality last.
  *
- * RPD = requests per day on free tier:
- *   gemini-3.1-flash-lite-preview → 500  RPD, 15 RPM  (best daily capacity)
- *   gemma-4-31b-it                → 1500 RPD, 15 RPM, unlimited TPM
- *   gemma-4-26b-a4b-it            → 1500 RPD, 15 RPM, unlimited TPM
- *   gemini-2.5-flash              → 20   RPD, 5  RPM  (best quality — conserve)
- *   gemini-2.5-flash-lite         → 20   RPD, 10 RPM
- *   gemini-3-flash-preview        → 20   RPD, 5  RPM
- *   gemini-3.5-flash              → 20   RPD, 5  RPM
+ * Free-tier limits (verified 2026-09-29):
+ *   Groq:         openai/gpt-oss-20b  — 30 RPM, 1K RPD
+ *                 openai/gpt-oss-120b — 30 RPM, 1K RPD
+ *                 qwen/qwen3.8-27b    — 30 RPM, 1K RPD
+ *   Gemini:       gemini-3.5-flash    — free tier, 500 RPD
+ *                 gemini-3.8-flash    — free tier, 500 RPD
+ *   NVIDIA NIM:   requires "Public API Endpoints" account permission
+ *                 deepseek-ai/deepseek-v4.1-flash — 40 RPM (once enabled)
+ *   OpenRouter:   nvidia/nemotron-3-super-120b-a12b:free — 20 RPM, 50 RPD
+ *   Hugging Face: Qwen/Qwen2.5-72B-Instruct — ~1K RPD
  */
-export const GEMINI_CASCADE: readonly string[] = [
-  "gemini-3.1-flash-lite-preview",
-  "gemma-4-31b-it",
-  "gemma-4-26b-a4b-it",
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
-  "gemini-3-flash-preview",
+export const MODEL_ROUTING: Record<LLMStage, ModelCandidate[]> = {
+  intent: [
+    { provider: "groq", model: "openai/gpt-oss-20b" },
+    { provider: "groq", model: "openai/gpt-oss-120b" },
+    { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
+    { provider: "gemini", model: "gemini-3.5-flash" },
+    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
+  ],
+  "fetch-planner": [
+    { provider: "groq", model: "openai/gpt-oss-20b" },
+    { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
+    { provider: "gemini", model: "gemini-3.5-flash" },
+    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
+  ],
+  synthesis: [
+    { provider: "groq", model: "openai/gpt-oss-120b" },
+    { provider: "groq", model: "qwen/qwen3.8-27b" },
+    { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
+    { provider: "gemini", model: "gemini-3.8-flash" },
+    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
+  ],
+  reflow: [
+    { provider: "groq", model: "openai/gpt-oss-20b" },
+    { provider: "groq", model: "openai/gpt-oss-120b" },
+    { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
+    { provider: "gemini", model: "gemini-3.5-flash" },
+  ],
+  qa: [
+    { provider: "groq", model: "openai/gpt-oss-20b" },
+    { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
+    { provider: "gemini", model: "gemini-3.5-flash" },
+    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
+  ],
+};
+
+// ── Stage parameters ────────────────────────────────────────────────────────
+
+export interface StageParams {
+  maxOutputTokens: number;
+  temperature: number;
+}
+
+export const STAGE_PARAMS: Record<LLMStage, StageParams> = {
+  intent: { maxOutputTokens: 4096, temperature: 0.3 },
+  "fetch-planner": { maxOutputTokens: 4096, temperature: 0.3 },
+  synthesis: { maxOutputTokens: 65536, temperature: 0.7 },
+  reflow: { maxOutputTokens: 4096, temperature: 0.3 },
+  qa: { maxOutputTokens: 4096, temperature: 0.3 },
+};
+
+// ── Tier inference (for response metadata) ──────────────────────────────────
+
+export function inferTier(stage: LLMStage, candidateIndex: number): ModelTier {
+  const list = MODEL_ROUTING[stage];
+  const third = Math.max(1, Math.ceil(list.length / 3));
+  if (candidateIndex < third) return "fast";
+  if (candidateIndex < third * 2) return "mid";
+  return "frontier";
+}
+
+// ── Gemini-native search grounding cascade ──────────────────────────────────
+// Only used by geminiSearchGrounded (Google Search tool requires the native
+// Gemini SDK, NOT the OpenAI-compat endpoint).
+
+export const GEMINI_SEARCH_MODELS: readonly string[] = [
   "gemini-3.5-flash",
+  "gemini-3.8-flash",
+  "gemini-3.1-flash-lite",
 ] as const;
 
-/** Default tier per stage (projectStructure.md §7.2). Escalation goes fast→mid→frontier. */
+// ── Legacy exports (kept for backward compat; unused by new routing) ────────
+
 export const STAGE_DEFAULT_TIER: Record<LLMStage, ModelTier> = {
   intent: "fast",
   "fetch-planner": "fast",
@@ -49,7 +108,6 @@ export const STAGE_DEFAULT_TIER: Record<LLMStage, ModelTier> = {
   qa: "fast",
 };
 
-/** Max escalation tier per stage. Synthesis is the only path allowed to reach frontier. */
 export const STAGE_MAX_TIER: Record<LLMStage, ModelTier> = {
   intent: "mid",
   "fetch-planner": "mid",

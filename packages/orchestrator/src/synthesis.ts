@@ -553,7 +553,7 @@ export async function synthesizePlan(
         ? `Assembling the days from the researched shortlist…`
         : `Writing a ${brief.facts.partyAdults ?? 2}-person plan, budget: ${brief.facts.budgetTier}…`,
     );
-    merged = await synthesizeBatched(brief, researchBlock, numDays, start, llm, cb);
+    merged = await synthesizeBatched(brief, researchBlock, numDays, start, llm, cb, pid);
   }
 
   cb.onThought("All days generated — validating structure…");
@@ -638,7 +638,7 @@ export async function synthesizePlan(
   return plan;
 }
 
-/** The pre-skeleton path: 3 days per call, no streaming. Kept as the fallback. */
+/** The pre-skeleton path: 3 days per call, with progressive streaming. Kept as the fallback. */
 async function synthesizeBatched(
   brief: TripBrief,
   researchBlock: string,
@@ -646,6 +646,7 @@ async function synthesizeBatched(
   start: string,
   llm: LLMClient,
   cb: StreamCallbacks,
+  pid: string,
 ): Promise<Record<string, unknown>> {
   const batches: Array<{ start: number; end: number }> = [];
   for (let d = 1; d <= numDays; d += DAYS_PER_BATCH) {
@@ -654,6 +655,7 @@ async function synthesizeBatched(
 
   let merged: Record<string, unknown> | undefined;
   const allDays: unknown[] = [];
+  const parsedDays: DayPlan[] = [];
   let hotelHint: string | undefined;
 
   for (let i = 0; i < batches.length; i++) {
@@ -677,6 +679,25 @@ async function synthesizeBatched(
 
     const batchDays = raw["days"] as unknown[];
     allDays.push(...(batchDays ?? []));
+
+    // Parse new batch days and emit a partial plan so the UI can show days progressively
+    if (merged) {
+      for (const rawDay of batchDays) {
+        const parsed = DayPlanSchema.safeParse(rawDay);
+        if (parsed.success) parsedDays.push(parsed.data);
+      }
+      if (parsedDays.length > 0) {
+        cb.onPartialPlan?.({
+          planId: pid,
+          title: (merged["title"] as string) ?? `${brief.facts.destination} itinerary`,
+          description: (merged["description"] as string) ?? "",
+          totalEstimatedCost: (merged["totalEstimatedCost"] as { amount: number; currency: string }) ?? { amount: 0, currency: "EUR" },
+          duration: (merged["duration"] as string) ?? `${numDays} Days`,
+          days: [...parsedDays],
+          inferenceChain: brief.inferenceChain,
+        });
+      }
+    }
   }
 
   if (!merged) throw new Error("Synthesis: no batches produced output");

@@ -70,3 +70,44 @@ export async function updatePreferences(prefs: UserPreferences): Promise<UserPre
   if (!res.ok) throw new Error("Failed to save preferences");
   return res.json() as Promise<UserPreferences>;
 }
+
+export interface MemoryEntry {
+  id: string;
+  category: string;
+  fact: string;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getMemories(): Promise<MemoryEntry[]> {
+  const res = await fetch(`${BASE}/auth/memories`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load memories");
+  return res.json() as Promise<MemoryEntry[]>;
+}
+
+export async function addMemory(category: string, fact: string): Promise<MemoryEntry> {
+  const res = await fetch(`${BASE}/auth/memories`, {
+    ...opts, method: "POST", body: JSON.stringify({ category, fact }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? "Failed to add memory");
+  }
+  return res.json() as Promise<MemoryEntry>;
+}
+
+export async function deleteMemory(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/auth/memories/${id}`, {
+    credentials: "include", method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete memory");
+}
+
+export async function updateMemories(memories: MemoryEntry[]): Promise<MemoryEntry[]> {
+  const res = await fetch(`${BASE}/auth/memories`, {
+    ...opts, method: "PUT", body: JSON.stringify({ memories }),
+  });
+  if (!res.ok) throw new Error("Failed to update memories");
+  return res.json() as Promise<MemoryEntry[]>;
+}

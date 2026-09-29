@@ -109,6 +109,7 @@ export function UserMenu() {
           <div style={{ padding: "0.25rem 0" }}>
             <MenuItem href="/trips" icon="🗺" label="My Trips" />
             <MenuItem href="/settings" icon="⚙" label="Preferences" />
+            <MenuItem href="/memories" icon="🧠" label="Memory" />
           </div>
 
           <div style={{ borderTop: "1px solid var(--border)", padding: "0.25rem 0" }}>
