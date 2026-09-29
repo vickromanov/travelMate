@@ -10,52 +10,56 @@ import type { LLMStage, ModelTier } from "@travelmate/contracts";
 // ── Model routing table ─────────────────────────────────────────────────────
 
 export interface ModelCandidate {
-  provider: "groq" | "cerebras" | "gemini";
+  provider: "groq" | "gemini" | "nvidia" | "openrouter" | "huggingface";
   model: string;
 }
 
 /**
  * Per-stage candidate lists. Cheapest / fastest first; quality last.
  *
- * Free-tier limits (verified 2026-09-25):
- *   Groq:     openai/gpt-oss-20b  — 30 RPM, 1K RPD, 8K TPM
- *             openai/gpt-oss-120b — 30 RPM, 1K RPD, 8K TPM
- *             qwen/qwen3.8-27b    — 30 RPM, 1K RPD, 8K TPM
- *   Cerebras: qwen-3.8-27b        — 5 RPM, 1M TPD
- *             gpt-oss-120b        — 5 RPM, 1M TPD
- *   Gemini:   gemini-3.5-flash    — free tier
- *             gemini-3.8-flash    — free tier
+ * Free-tier limits (verified 2026-09-29):
+ *   Groq:         openai/gpt-oss-20b  — 30 RPM, 1K RPD
+ *                 openai/gpt-oss-120b — 30 RPM, 1K RPD
+ *                 qwen/qwen3.8-27b    — 30 RPM, 1K RPD
+ *   Gemini:       gemini-3.5-flash    — free tier, 500 RPD
+ *                 gemini-3.8-flash    — free tier, 500 RPD
+ *   NVIDIA NIM:   requires "Public API Endpoints" account permission
+ *                 deepseek-ai/deepseek-v4.1-flash — 40 RPM (once enabled)
+ *   OpenRouter:   nvidia/nemotron-3-super-120b-a12b:free — 20 RPM, 50 RPD
+ *   Hugging Face: Qwen/Qwen2.5-72B-Instruct — ~1K RPD
  */
 export const MODEL_ROUTING: Record<LLMStage, ModelCandidate[]> = {
   intent: [
     { provider: "groq", model: "openai/gpt-oss-20b" },
-    { provider: "cerebras", model: "qwen-3.8-27b" },
     { provider: "groq", model: "openai/gpt-oss-120b" },
+    { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { provider: "gemini", model: "gemini-3.5-flash" },
-    { provider: "gemini", model: "gemini-3.8-flash" },
+    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
   ],
   "fetch-planner": [
     { provider: "groq", model: "openai/gpt-oss-20b" },
-    { provider: "cerebras", model: "qwen-3.8-27b" },
+    { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { provider: "gemini", model: "gemini-3.5-flash" },
+    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
   ],
   synthesis: [
     { provider: "groq", model: "openai/gpt-oss-120b" },
-    { provider: "cerebras", model: "gpt-oss-120b" },
     { provider: "groq", model: "qwen/qwen3.8-27b" },
-    { provider: "cerebras", model: "qwen-3.8-27b" },
+    { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { provider: "gemini", model: "gemini-3.8-flash" },
+    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
   ],
   reflow: [
     { provider: "groq", model: "openai/gpt-oss-20b" },
-    { provider: "cerebras", model: "qwen-3.8-27b" },
     { provider: "groq", model: "openai/gpt-oss-120b" },
+    { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { provider: "gemini", model: "gemini-3.5-flash" },
   ],
   qa: [
     { provider: "groq", model: "openai/gpt-oss-20b" },
-    { provider: "cerebras", model: "qwen-3.8-27b" },
+    { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
     { provider: "gemini", model: "gemini-3.5-flash" },
+    { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
   ],
 };
 

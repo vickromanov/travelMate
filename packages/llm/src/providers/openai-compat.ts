@@ -1,9 +1,8 @@
 /**
  * Generic OpenAI-compatible chat-completions client.
  *
- * All three providers (Groq, Cerebras, Gemini) expose the same
- * POST /chat/completions shape — this module handles one call + error
- * classification so the routing loop stays clean.
+ * All providers expose the same POST /chat/completions shape — this module
+ * handles one call + error classification so the routing loop stays clean.
  */
 
 export interface ProviderConfig {
@@ -20,17 +19,29 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
     baseUrl: "https://api.groq.com/openai/v1",
     envKey: "GROQ_API_KEY",
   },
-  cerebras: {
-    id: "cerebras",
-    name: "Cerebras",
-    baseUrl: "https://api.cerebras.ai/v1",
-    envKey: "CEREBRAS_API_KEY",
-  },
   gemini: {
     id: "gemini",
     name: "Gemini",
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     envKey: "GEMINI_API_KEY",
+  },
+  nvidia: {
+    id: "nvidia",
+    name: "NVIDIA NIM",
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+    envKey: "NVIDIA_API_KEY",
+  },
+  openrouter: {
+    id: "openrouter",
+    name: "OpenRouter",
+    baseUrl: "https://openrouter.ai/api/v1",
+    envKey: "OPENROUTER_API_KEY",
+  },
+  huggingface: {
+    id: "huggingface",
+    name: "Hugging Face",
+    baseUrl: "https://router.huggingface.co/v1",
+    envKey: "HF_API_KEY",
   },
 };
 
@@ -126,7 +137,8 @@ export async function chatComplete(
     usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
 
-  const text = json.choices?.[0]?.message?.content ?? "";
+  const msg = json.choices?.[0]?.message as Record<string, unknown> | undefined;
+  const text = (msg?.content as string) ?? (msg?.reasoning_content as string) ?? "";
   return {
     text,
     usage: {

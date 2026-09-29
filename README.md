@@ -41,14 +41,16 @@ pnpm install
 
 ### 2. LLM provider keys
 
-Copy `.env.local.example` to `.env.local` and add API keys. The LLM layer routes
-across three free-tier OpenAI-compatible providers — missing keys are skipped:
+Copy `.env.example` to `.env.local` and add API keys. The LLM layer routes
+across five free-tier OpenAI-compatible providers — missing keys are skipped:
 
 | Provider | Env var | Free-tier signup |
 |---|---|---|
 | **Groq** | `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) |
-| **Cerebras** | `CEREBRAS_API_KEY` | [cloud.cerebras.ai](https://cloud.cerebras.ai) |
 | **Gemini** | `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com) |
+| **NVIDIA NIM** | `NVIDIA_API_KEY` | [build.nvidia.com](https://build.nvidia.com) |
+| **OpenRouter** | `OPENROUTER_API_KEY` | [openrouter.ai](https://openrouter.ai) |
+| **Hugging Face** | `HF_API_KEY` | [huggingface.co](https://huggingface.co/settings/tokens) |
 
 At least one key is required. The routing table (`packages/llm/src/router.ts`)
 controls which provider+model handles each pipeline stage, with automatic

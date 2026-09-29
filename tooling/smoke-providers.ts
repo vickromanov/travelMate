@@ -5,7 +5,7 @@
  * Usage (from repo root):
  *   pnpm smoke            # or: npx tsx tooling/smoke-providers.ts
  *
- * Reads GROQ_API_KEY, CEREBRAS_API_KEY, GEMINI_API_KEY from .env.local.
+ * Reads keys from .env.local.
  * Exits 0 if at least one provider works; exits 1 if ALL fail.
  */
 import { config as loadEnv } from "dotenv";
@@ -30,16 +30,28 @@ const providers: ProviderTest[] = [
     model: "openai/gpt-oss-20b",
   },
   {
-    name: "Cerebras",
-    envKey: "CEREBRAS_API_KEY",
-    baseUrl: "https://api.cerebras.ai/v1",
-    model: "qwen-3.8-27b",
-  },
-  {
     name: "Gemini (OpenAI-compat)",
     envKey: "GEMINI_API_KEY",
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     model: "gemini-3.5-flash",
+  },
+  {
+    name: "NVIDIA NIM",
+    envKey: "NVIDIA_API_KEY",
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+    model: "deepseek-ai/deepseek-v4.1-flash",
+  },
+  {
+    name: "OpenRouter",
+    envKey: "OPENROUTER_API_KEY",
+    baseUrl: "https://openrouter.ai/api/v1",
+    model: "nvidia/nemotron-3-super-120b-a12b:free",
+  },
+  {
+    name: "Hugging Face",
+    envKey: "HF_API_KEY",
+    baseUrl: "https://router.huggingface.co/v1",
+    model: "Qwen/Qwen2.5-72B-Instruct",
   },
 ];
 
