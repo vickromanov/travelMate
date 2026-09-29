@@ -74,7 +74,7 @@ export interface StageParams {
 export const STAGE_PARAMS: Record<LLMStage, StageParams> = {
   intent: { maxOutputTokens: 4096, temperature: 0.3 },
   "fetch-planner": { maxOutputTokens: 4096, temperature: 0.3 },
-  synthesis: { maxOutputTokens: 65536, temperature: 0.7 },
+  synthesis: { maxOutputTokens: 16384, temperature: 0.7 },
   reflow: { maxOutputTokens: 4096, temperature: 0.3 },
   qa: { maxOutputTokens: 4096, temperature: 0.3 },
 };
