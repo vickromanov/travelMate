@@ -31,6 +31,14 @@ export interface LLMClient {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+// Session-level circuit breaker: providers that returned fatal errors (403
+// banned, 402 payment required) or repeated 429s (quota permanently at zero)
+// are skipped for the rest of the process lifetime instead of being re-hit
+// on every cascade call.
+const exhaustedProviders = new Set<string>();
+const rateLimitStrikes = new Map<string, number>();
+const RATE_LIMIT_STRIKE_THRESHOLD = 2;
+
 function buildMultiProviderClient(): LLMClient {
   logProviderAvailability();
 
@@ -42,8 +50,10 @@ function buildMultiProviderClient(): LLMClient {
 
       for (let i = 0; i < candidates.length; i++) {
         const { provider, model } = candidates[i]!;
+        const candidateKey = `${provider}/${model}`;
 
         if (!process.env[PROVIDERS[provider]!.envKey]) continue;
+        if (exhaustedProviders.has(candidateKey)) continue;
 
         const messages = [
           ...(req.system
@@ -63,7 +73,7 @@ function buildMultiProviderClient(): LLMClient {
           const response: LLMResponse = {
             text: result.text,
             tierUsed: tier,
-            modelId: `${provider}/${model}`,
+            modelId: candidateKey,
             usage: {
               inputTokens: result.usage.inputTokens,
               cachedInputTokens: 0,
@@ -74,31 +84,40 @@ function buildMultiProviderClient(): LLMClient {
 
           const isValid = !validate || validate(response.text);
           if (isValid) {
+            rateLimitStrikes.delete(candidateKey);
             if (process.env.NODE_ENV === "test" && !withinBudget(req.stage, response.usage)) {
               console.warn(`[llm] over token budget for stage ${req.stage}`);
             }
-            console.log(`[llm] ${req.stage} served by ${provider}/${model}`);
+            console.log(`[llm] ${req.stage} served by ${candidateKey}`);
             return response;
           }
 
-          console.warn(`[llm] ${provider}/${model} returned invalid output for ${req.stage} — trying next candidate`);
+          console.warn(`[llm] ${candidateKey} returned invalid output for ${req.stage} — trying next candidate`);
         } catch (err) {
           lastError = err instanceof Error ? err : new Error(String(err));
 
           if (err instanceof ProviderError) {
             if (err.kind === "fatal") {
-              console.warn(`[llm] ${provider}/${model} fatal error — skipping: ${err.message.slice(0, 120)}`);
+              exhaustedProviders.add(candidateKey);
+              console.warn(`[llm] ${candidateKey} exhausted (fatal) — will skip for remaining requests: ${err.message.slice(0, 120)}`);
+              continue;
+            }
+            const strikes = (rateLimitStrikes.get(candidateKey) ?? 0) + 1;
+            rateLimitStrikes.set(candidateKey, strikes);
+            if (strikes >= RATE_LIMIT_STRIKE_THRESHOLD) {
+              exhaustedProviders.add(candidateKey);
+              console.warn(`[llm] ${candidateKey} exhausted (${strikes} consecutive 429s) — will skip for remaining requests`);
               continue;
             }
             if (err.retryAfterMs) {
               const waitMs = Math.min(err.retryAfterMs, 30_000);
-              console.warn(`[llm] ${provider}/${model} rate-limited — waiting ${waitMs}ms then trying next`);
+              console.warn(`[llm] ${candidateKey} rate-limited (strike ${strikes}) — waiting ${waitMs}ms then trying next`);
               await sleep(waitMs);
             } else {
-              console.warn(`[llm] ${provider}/${model} retryable error — trying next: ${err.message.slice(0, 120)}`);
+              console.warn(`[llm] ${candidateKey} retryable error (strike ${strikes}) — trying next: ${err.message.slice(0, 120)}`);
             }
           } else {
-            console.warn(`[llm] ${provider}/${model} unexpected error — trying next: ${lastError.message.slice(0, 120)}`);
+            console.warn(`[llm] ${candidateKey} unexpected error — trying next: ${lastError.message.slice(0, 120)}`);
           }
         }
       }

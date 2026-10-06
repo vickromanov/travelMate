@@ -96,8 +96,8 @@ export async function geminiSearchGrounded(prompt: string): Promise<string | nul
     } catch (err) {
       const kind = (err as { kind?: ErrorKind }).kind ?? "throttled";
       const msg = err instanceof Error ? err.message.slice(0, 80) : String(err);
-      if (kind === "dead") deadModels.add(modelId);
-      console.warn(`[gemini-search] ${modelId} failed (${msg}) — trying next`);
+      if (kind === "dead" || kind === "throttled") deadModels.add(modelId);
+      console.warn(`[gemini-search] ${modelId} failed (${msg}) — ${kind === "throttled" ? "exhausted" : "dead"}, skipping for remaining requests`);
     }
   }
   return null;

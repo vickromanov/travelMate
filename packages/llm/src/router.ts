@@ -28,19 +28,23 @@ export interface ModelCandidate {
  *   OpenRouter:   nvidia/nemotron-3-super-120b-a12b:free — 20 RPM, 50 RPD
  *   Hugging Face: Qwen/Qwen2.5-72B-Instruct — ~1K RPD
  */
+// Gemini is used ONLY for terminal stages (synthesis, reflow) whose output goes
+// directly to the user, and for its unique Search grounding capability (gemini.ts).
+// It is excluded from upstream stages (intent, fetch-planner, qa) whose output
+// feeds into downstream LLM calls potentially served by other providers — mixing
+// Gemini output into competing-model prompts risks triggering Google's automated
+// model-distillation detection.
 export const MODEL_ROUTING: Record<LLMStage, ModelCandidate[]> = {
   intent: [
     { provider: "groq", model: "openai/gpt-oss-20b" },
     { provider: "groq", model: "openai/gpt-oss-120b" },
     { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
     { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
-    { provider: "gemini", model: "gemini-3.5-flash" },
   ],
   "fetch-planner": [
     { provider: "groq", model: "openai/gpt-oss-20b" },
     { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
     { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
-    { provider: "gemini", model: "gemini-3.5-flash" },
   ],
   synthesis: [
     { provider: "gemini", model: "gemini-3.5-flash" },
@@ -61,7 +65,6 @@ export const MODEL_ROUTING: Record<LLMStage, ModelCandidate[]> = {
     { provider: "groq", model: "openai/gpt-oss-20b" },
     { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
     { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
-    { provider: "gemini", model: "gemini-3.5-flash" },
   ],
 };
 
