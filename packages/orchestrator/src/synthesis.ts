@@ -21,6 +21,8 @@ import { verifyDayLinks } from "./verify-links.js";
 import { verifyVenues } from "./verify-venues.js";
 import { enforceConsistency } from "./consistency.js";
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 /** Minimal TripPlan shell so enforceConsistency can run on a single day. */
 function emptyPlanShell(): TripPlan {
   return {
@@ -749,30 +751,15 @@ async function synthesizeProgressive(
     inferenceChain: brief.inferenceChain,
   });
 
-  const PAIR_SIZE = 2;
-  for (let i = 0; i < skeleton.days.length; i += PAIR_SIZE) {
-    const pair = skeleton.days.slice(i, i + PAIR_SIZE);
+  for (const sd of skeleton.days) {
     const prevEnd = days.length > 0 ? lastVenueOf(days[days.length - 1]!) : undefined;
+    cb.onThought(`Writing day ${sd.dayNumber} of ${numDays}${sd.title ? ` — ${sd.title}` : ""}…`);
 
-    for (const sd of pair) {
-      cb.onThought(`Writing day ${sd.dayNumber} of ${numDays}${sd.title ? ` — ${sd.title}` : ""}…`);
-    }
-
-    const results = await Promise.all(
-      pair.map((sd, idx) => {
-        const hint = idx === 0
-          ? prevEnd
-          : pair[0]!.hotel || prevEnd;
-        return synthesizeDay(brief, sd, numDays, researchBlock, hint, llm);
-      }),
-    );
-
-    for (const day of results) {
-      enforceConsistency({ ...emptyPlanShell(), days: [day] });
-      days.push(day);
-      cb.onThought(`Day ${day.dayNumber} ready — ${day.blocks.length} blocks.`);
-      cb.onPartialPlan?.(partialPlan());
-    }
+    const day = await synthesizeDay(brief, sd, numDays, researchBlock, prevEnd, llm);
+    enforceConsistency({ ...emptyPlanShell(), days: [day] });
+    days.push(day);
+    cb.onThought(`Day ${day.dayNumber} ready — ${day.blocks.length} blocks.`);
+    cb.onPartialPlan?.(partialPlan());
   }
 
   return {
@@ -803,7 +790,7 @@ async function synthesizeDay(
     return raw;
   };
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     let res;
     try {
       res = await llm.run(
@@ -828,6 +815,12 @@ async function synthesizeDay(
         },
       );
     } catch (err) {
+      if (attempt < 3) {
+        const cooldown = attempt === 1 ? 20_000 : 40_000;
+        console.warn(`[synthesis] day ${sd.dayNumber}: all providers failed (attempt ${attempt}/3), retrying after ${cooldown / 1000}s cooldown…`);
+        await sleep(cooldown);
+        continue;
+      }
       throw new Error(
         `The AI could not produce a valid schedule for day ${sd.dayNumber} after several attempts. ` +
         `This is usually temporary — please try again. (${err instanceof Error ? err.message : err})`,

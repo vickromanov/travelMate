@@ -385,12 +385,15 @@ function ThinkingScreen({ thoughts, destination, tripType }: { thoughts: string[
           <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: 700, letterSpacing: 2.5, textTransform: "uppercase" }}>
             ✈ TravelMate
           </div>
-          <div style={{
-            background: "rgba(255,255,255,0.1)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-            border: "1px solid rgba(255,255,255,0.15)", borderRadius: 999,
-            padding: "5px 14px", color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 600,
-          }}>
-            ⏱ {elapsedStr}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{
+              background: "rgba(255,255,255,0.1)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+              border: "1px solid rgba(255,255,255,0.15)", borderRadius: 999,
+              padding: "5px 14px", color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 600,
+            }}>
+              ⏱ {elapsedStr}
+            </div>
+            <UserMenu />
           </div>
         </div>
 
@@ -1087,7 +1090,7 @@ export default function PlanPage() {
           es.close();
           if (!cached) fetchPlanFromApi(planId);
         }
-      }, 5000);
+      }, 30_000);
     });
 
     es.addEventListener("thought", (e) => {
@@ -1276,7 +1279,7 @@ export default function PlanPage() {
 
   return (
     <>
-      {screen.kind !== "itinerary" && (
+      {screen.kind !== "itinerary" && screen.kind !== "thinking" && (
         <div style={{ position: "fixed", top: 16, right: 20, zIndex: 200 }}>
           <UserMenu />
         </div>

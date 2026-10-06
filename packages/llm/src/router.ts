@@ -43,11 +43,12 @@ export const MODEL_ROUTING: Record<LLMStage, ModelCandidate[]> = {
     { provider: "gemini", model: "gemini-3.5-flash" },
   ],
   synthesis: [
+    { provider: "gemini", model: "gemini-3.5-flash" },
+    { provider: "gemini", model: "gemini-3.8-flash" },
     { provider: "groq", model: "openai/gpt-oss-120b" },
     { provider: "groq", model: "qwen/qwen3.8-27b" },
     { provider: "huggingface", model: "Qwen/Qwen2.5-72B-Instruct" },
     { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
-    { provider: "gemini", model: "gemini-3.8-flash" },
   ],
   reflow: [
     { provider: "groq", model: "openai/gpt-oss-20b" },
@@ -77,7 +78,7 @@ export interface StageParams {
 export const STAGE_PARAMS: Record<LLMStage, StageParams> = {
   intent: { maxOutputTokens: 4096, temperature: 0.3, timeoutMs: 30_000 },
   "fetch-planner": { maxOutputTokens: 4096, temperature: 0.3, timeoutMs: 45_000 },
-  synthesis: { maxOutputTokens: 16384, temperature: 0.7, timeoutMs: 60_000 },
+  synthesis: { maxOutputTokens: 4096, temperature: 0.7, timeoutMs: 90_000 },
   reflow: { maxOutputTokens: 4096, temperature: 0.3, timeoutMs: 30_000 },
   qa: { maxOutputTokens: 4096, temperature: 0.3, timeoutMs: 30_000 },
 };

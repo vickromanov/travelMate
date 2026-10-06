@@ -208,6 +208,11 @@ export async function planRoutes(app: FastifyInstance) {
     bus.on("ready", onReady);
     bus.on("error", onError);
 
+    // Send an immediate keepalive so the client knows the stream is alive.
+    // The pipeline's first thought may fire before the client connects (race),
+    // so this ensures the client receives at least one event within its timeout.
+    sseWrite(reply, "thought", { text: "Connecting…" });
+
     // Replay: a late or RECONNECTING client immediately gets the days that are
     // already generated — it never waits blind while "day 2" is being written.
     if (channel.latestPartial) {
